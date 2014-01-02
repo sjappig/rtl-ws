@@ -3,7 +3,7 @@ echo [!] testing
 gcc -DTEST resample.c common_sp.c
 ./a.out
 echo [!] compiling c
-gcc -c -DINSTALL_DATADIR=\"/home/pi/codebase/rtl-ws/resources\" -o rtl-ws-server.o rtl-ws-server.c
+gcc -c -DINSTALL_DATADIR=\"/home/pi/codebase/github/rtl-ws/resources\" -o rtl-ws-server.o rtl-ws-server.c
 gcc -c -o resample.o resample.c 
 gcc -c -o common_sp.o common_sp.c
 gcc -c -o rtl_sensor.o rtl_sensor.c
