@@ -31,7 +31,7 @@
 #define FFT_POINTS				1024
 #define PORT 					80
 #define FM_BW                   128000
-#define LOCAL_RESOURCE_PATH 	INSTALL_DATADIR
+#define LOCAL_RESOURCE_PATH 	"../resources" 
 
 struct transfer__ {
 	uint8_t* buf;
@@ -395,6 +395,7 @@ static int callback_rtl_ws(struct libwebsocket_context *context,
 			memcpy(&send_buffer[LWS_SEND_BUFFER_PRE_PADDING], tmpbuffer, n);
 			nn = write_spectrum_message(&send_buffer[LWS_SEND_BUFFER_PRE_PADDING+n], SEND_BUFFER_SIZE/2);
 
+		   // TODO: LWS_WRITE_BINARY
 		        n = libwebsocket_write(wsi, (unsigned char *)
 				&send_buffer[LWS_SEND_BUFFER_PRE_PADDING], n+nn, LWS_WRITE_TEXT);
 		}	
