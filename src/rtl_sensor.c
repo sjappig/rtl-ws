@@ -2,7 +2,7 @@
 #include <rtl-sdr.h>
 #include "rtl_sensor.h"
 
-#define _RTL_DEFAULT_SAMPLE_RATE		2048000
+#define _RTL_DEFAULT_SAMPLE_RATE	2048000
 #define _RTL_DEFAULT_FREQUENCY 		100000000
 
 static rtlsdr_dev_t *dev = NULL;
@@ -64,7 +64,7 @@ int rtl_init(int dev_index)
 	if (r < 0)
 		fprintf(stderr, "WARNING: Failed to enable manual gain.\n");
 
-    /* Set the tuner gain */
+        /* Set the tuner gain */
 	r = rtlsdr_set_tuner_gain(dev, gain);
 	if (r < 0)
 		fprintf(stderr, "WARNING: Failed to set tuner gain.\n");

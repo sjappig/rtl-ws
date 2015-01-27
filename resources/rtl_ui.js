@@ -7,9 +7,11 @@ var last_x = 0, last_y = 0;
 var ctx;
 var socket_lm;
 var color = "#000000";
-var y_offset = 200;
+var y_offset = 256;
 var spectrogram_offset = 315;
 var frequency = 100000;
+var swgain = 0;
+var real_swgain = 0;
 var real_frequency = 100000;
 var bandwidth = 2048;
 var real_bandwidth = 2048;
@@ -26,20 +28,31 @@ var spectrogram_idx = -1;
 var spectrogram_image;
 
 function initialize() {
-	socket_lm = new WebSocket(get_appropriate_ws_url(),
-		"rtl-ws-protocol");
+	socket_lm = new WebSocket(get_appropriate_ws_url(), "rtl-ws-protocol");
+	console.log("WebSocket instantiated");
 	try {
+		socket_lm.binaryType = "arraybuffer";
+
 		socket_lm.onopen = function() {
 			document.getElementById("ws_status").style.backgroundColor = "#40ff40";
 			document.getElementById("ws_status").textContent = " websocket connection opened ";
 		} 
 
 		socket_lm.onmessage = function got_packet(msg) {
-			ctx.clearRect(0, 0, 1030, 315);
-			j = msg.data.split(';');
+			var bytearray = new Uint8Array(msg.data);
+			var header = "";
+			var readChar = '0';
+			var header_len = 0;
+			while (readChar != 'd') {
+				readChar = String.fromCharCode(bytearray[header_len++]);
+				header += readChar;
+			}
+                        ctx.clearRect(0, 0, 1030, 315);
+			
+			j = header.split(';');
 			f = 0;
 			var redraw_hz_axis = false;
-			while (f < j.length - 1) {
+			while (f < j.length) {
 				i = j[f].split(' ');
 				if (i[0] == 'd') {
 					spectrogram_idx++;
@@ -49,9 +62,10 @@ function initialize() {
 					ctx.beginPath();
 					ctx.moveTo(0, -i[1]*2+y_offset);
 					ctx.strokeStyle = "black";
-					for (var idx = 1; idx < i.length; idx ++) {
-						spectrogram[spectrogram_idx][idx-1] = i[idx];
-						ctx.lineTo(idx, -i[idx]*4+y_offset);
+					for (var idx = 0; idx < bytearray.length - header_len; idx++) {
+						var value = bytearray[idx + header_len];
+						spectrogram[spectrogram_idx][idx-1] = value;
+						ctx.lineTo(idx, -value*4+y_offset);
 					}
 					ctx.stroke();
 					ctx.closePath();
@@ -64,7 +78,7 @@ function initialize() {
 						real_bandwidth = parseInt(bandwidth);
 						redraw_hz_axis = true;
 					}
-			    } else if (i[0] == 'f') {
+			    	} else if (i[0] == 'f') {
 					var freq_element = document.getElementById("frequency");
 					if ((freq_element.value*1000) != i[1]) {
 						freq_element.style.color = "lightgray";
@@ -74,7 +88,16 @@ function initialize() {
 						redraw_hz_axis = true;
 					}
 				}
-				
+				else if (i[0] == 's') {
+                                        var swgain_element = document.getElementById("swgain");
+                                        if (swgain_element.value != i[1]) {
+                                                swgain_element.style.color = "lightgray";
+                                        } else {
+                                                swgain_element.style.color = "black";
+                                                real_swgain = parseInt(swgain);
+                                        }
+                                }
+
 				f++;
 			}
 			if (redraw_hz_axis) {
@@ -106,6 +129,11 @@ function initialize() {
 		socket_lm.onclose = function(){
 			document.getElementById("ws_status").style.backgroundColor = "#ff4040";
 			document.getElementById("ws_status").textContent = " websocket connection CLOSED ";
+		}
+		
+		socket_lm.onerror = function(){
+		        document.getElementById("ws_status").style.backgroundColor = "#ff4040";
+                        document.getElementById("ws_status").textContent = " websocket connection ERROR ";
 		}
 	} catch(exception) {
 		alert('<p>Error' + exception);  
@@ -175,6 +203,11 @@ function frequency_change() {
 function bw_change() {
 	bandwidth = document.getElementById("bandwidth").value;
 	socket_lm.send("bw " + bandwidth);
+}
+
+function swgain_change() {
+	swgain = document.getElementById("swgain").value;
+	socket_lm.send("swgain " + swgain);
 }
 
 function start_or_stop() {

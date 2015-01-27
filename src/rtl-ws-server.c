@@ -18,26 +18,24 @@
 #include "rtl_sensor.h"
 #include "spectrum.h"
 #include "resample.h"
+#include "signal_source.h"
+
+#define LOG(...)  printf(__VA_ARGS__); fflush(stdout);
 
 #define HTML_FILE 				"/rtl-ui.html"
 #define DEV_INDEX 				0
 
-#define DEFAULT_BUF_LENGTH		(16 * 16384)
-#define SEND_BUFFER_SIZE		(2 * 16384)
-#define FREQ_CMD 				"freq"
+#define DEFAULT_BUF_LENGTH	(16 * 16384)
+#define SEND_BUFFER_SIZE	(2 * 16384)
+#define FREQ_CMD 		"freq"
 #define SAMPLE_RATE_CMD         "bw"
-#define START_CMD				"start"
-#define STOP_CMD				"stop"
-#define FFT_POINTS				1024
-#define PORT 					80
+#define SW_GAIN_CMD             "swgain"
+#define START_CMD		"start"
+#define STOP_CMD		"stop"
+#define FFT_POINTS		1024
+#define PORT 			80
 #define FM_BW                   128000
 #define LOCAL_RESOURCE_PATH 	"../resources" 
-
-struct transfer__ {
-	uint8_t* buf;
-	int n_read;
-	uint64_t block_id;
-};
 
 struct per_session_data__http {
 	int fd;
@@ -47,7 +45,6 @@ struct per_session_data__rtl_ws {
 	int id;
     uint64_t block_id;
 };
-
 
 static int callback_http(struct libwebsocket_context *context,
 		struct libwebsocket *wsi,
@@ -81,103 +78,50 @@ static int latest_user_id = 1;
 static volatile int send_data = 0;
 static volatile int force_exit = 0;
 
-static volatile struct transfer__ transfer;
+static volatile int sw_gain = 0;
+
 static pthread_mutex_t data_mutex;
 static char* send_buffer = NULL;
 static spectrum_handle spectrum;
 
-static uint64_t spectrum_timestamp = 0;
+static volatile uint64_t spectrum_timestamp = 0;
 static char* spectrum_temp_buffer = NULL;
 
 static char *resource_path = LOCAL_RESOURCE_PATH;
+static double magnitude[FFT_POINTS] = {0};
 
-void *rtl_worker(void* user) 
+int should_write()
 {
- 	int r = 0;
- 	int n_read = 0;
- 	uint64_t bytes = 0;
- 	uint32_t out_block_size = DEFAULT_BUF_LENGTH;
- 	uint8_t* rtl_buffer = malloc(out_block_size * sizeof(uint8_t));
- 	struct timespec tv_start = {0,0};
- 	struct timespec tv_end = {0,0};
- 	uint64_t diff_us;
-
- 	transfer.buf = malloc(out_block_size * sizeof(uint8_t));
- 	printf("rtl worker started\n");
- 	fflush(stdout);
- 	while (!force_exit && r >= 0) 
- 	{
- 		if (bytes == 0) 
- 		{
- 			clock_gettime(CLOCK_MONOTONIC, &tv_start);
- 		}
-
- 		r = rtl_read(rtl_buffer, out_block_size, &n_read);
- 		n_read = n_read > out_block_size ? out_block_size : n_read;
- 		clock_gettime(CLOCK_MONOTONIC, &tv_end);
- 		bytes += n_read;
- 		if (r < 0) {
- 			fprintf(stderr, "WARNING: read failed. Exiting worker thread.\n");
- 			continue;
- 		}
- 		pthread_mutex_lock(&data_mutex);
- 		memcpy(transfer.buf, rtl_buffer, n_read);
- 		transfer.n_read = n_read;
- 		transfer.block_id++;
- 		pthread_mutex_unlock(&data_mutex);
- 		diff_us = (tv_end.tv_sec-tv_start.tv_sec)*1000*1000 + (tv_end.tv_nsec-tv_start.tv_nsec)/1000;
- 		if (diff_us > 10000000) 
- 		{
- 			printf("%llu bytes / %d us : %llu bytes/sec\n", bytes, diff_us, (bytes*1000*1000)/diff_us);
- 			fflush(stdout);
- 			bytes = 0;
- 		}
- 	}
- 	free(rtl_buffer);
+   if ((spectrum_timestamp + 250) < timestamp())
+   {
+      return 1;
+   }
+   return 0;
 }
 
-void *fm_worker(void* user) {
-	FILE* fid = fopen("fm_dump.bin", "w");
-	int r = 0;
-	int orig_bw = 0;
-	int fm_band_block_size = 0;
-	uint32_t out_block_size = DEFAULT_BUF_LENGTH;
-	uint8_t* orig_buffer = malloc(out_block_size * sizeof(uint8_t));
- 	cmplx_s32* fm_buffer = NULL;
- 	int resample_ratio = 0;
- 	uint64_t last_block_id = 0;
-
-	memset(orig_buffer, 0, out_block_size * sizeof(uint8_t));
-	printf("fm worker started\n");
- 	fflush(stdout);
- 	while (!force_exit && r >= 0) {
- 		if (orig_bw != rtl_sample_rate()) 
- 		{
- 			if (fm_buffer)
- 				free(fm_buffer);
- 			orig_bw = rtl_sample_rate();
- 			resample_ratio = (orig_bw / FM_BW);
- 			fm_band_block_size = out_block_size / (2*resample_ratio);
- 			fm_buffer = malloc(fm_band_block_size*sizeof(cmplx_s32));
- 			printf("out_block_size == %d\n", out_block_size);
- 			printf("fm_band_block_size == %d\n", fm_band_block_size);
- 			printf("resample_ratio == %d\n", resample_ratio);
- 		}
- 		if (last_block_id < transfer.block_id) {
- 			pthread_mutex_lock(&data_mutex);
- 			memcpy(orig_buffer, transfer.buf, transfer.n_read);
- 			last_block_id = transfer.block_id;
- 			pthread_mutex_unlock(&data_mutex);
- 			r = cic_decimate(resample_ratio, 1, (cmplx*) orig_buffer, out_block_size/2, fm_buffer, fm_band_block_size);
- 			//fwrite(fm_buffer, fm_band_block_size, sizeof(cmplx_s32), fid);
- 		}
- 	}
- 	free(fm_buffer);
- 	free(orig_buffer);
- 	printf("fm worker exited\n");
- 	fclose(fid);
- 	fflush(stdout);
- }
+void estimate_spectrum(const cmplx* complex_signal, int len)
+{
+   int i = 0;
+   int blocks = len / FFT_POINTS;
+  
+   if (blocks < 4)
+     return;
+   
+   pthread_mutex_lock(&data_mutex);
+   
+   memset(magnitude, 0, FFT_POINTS*sizeof(double));
+   
+   for (i = 0; i < 4; i++)
+   {      
+      if (add_spectrum(spectrum, &complex_signal[i*FFT_POINTS], magnitude, FFT_POINTS) != FFT_POINTS) 
+      {
+	 LOG("Error while estimating spectrum.");
+	 return;
+      }
+   }
+   
+   pthread_mutex_unlock(&data_mutex);
+}
 
 const char * get_mimetype(const char *file)
 {
@@ -260,7 +204,7 @@ static int callback_http(struct libwebsocket_context *context,
 		}
 
 		if (libwebsockets_serve_http_file(context, wsi, buf,
-						mimetype, NULL))
+						mimetype, NULL, 0))
 			return -1; /* through completion or error, close the socket */
 
 		break;
@@ -315,37 +259,27 @@ static int callback_http(struct libwebsocket_context *context,
 	return 0;
 }
 
-int should_write()
-{
-   if ((spectrum_timestamp + 200) < timestamp()) 
-   {
-      return 1;
-   }
-   
-   return 0;
-}
-
 int write_spectrum_message(char* buf, int buf_len) {
-        char* p = buf;
-	char convert_buf[10];
-	int idx = 0;
-	double magnitude[1024];
-    int N = FFT_POINTS*2*4;
-	pthread_mutex_lock(&data_mutex);
-    memcpy(spectrum_temp_buffer, transfer.buf, N);
-    pthread_mutex_unlock(&data_mutex);
-    sprintf(p++, "d");
-	calculate_spectrum(spectrum, (cmplx*)spectrum_temp_buffer, N, magnitude, 1024);
-	for (idx = 0; idx < 1024; idx++) {
-		sprintf(convert_buf, "%d", (int)magnitude[idx]);
-		sprintf(p++, " %s", convert_buf);
-		p += strlen(convert_buf);
-		if ((int)(p - buf) > (buf_len - 10))
-			break;
-	}
-	sprintf(p++, ";");
-    spectrum_timestamp = timestamp();
-	return (int)(p - buf);
+   char convert_buf[10];
+   int idx = 0;
+   int len = 0;
+   
+   pthread_mutex_lock(&data_mutex);
+    
+   sprintf(&buf[len], "d");
+   len++;
+   
+   //calculate_spectrum(spectrum, (cmplx*)spectrum_temp_buffer, N, magnitude, FFT_POINTS);
+   for (idx = 0; idx < FFT_POINTS; idx++) {
+      int m = 10*log10(abs(magnitude[idx] / 4)) + sw_gain;
+      m = m >= 0 ? m : 0;
+      m = m <= 255 ? m : 255;
+      buf[len++] = (char) m;
+   }
+   spectrum_timestamp = timestamp();
+   
+   pthread_mutex_unlock(&data_mutex);
+   return len;
 }
 
 static int callback_rtl_ws(struct libwebsocket_context *context,
@@ -385,19 +319,13 @@ static int callback_rtl_ws(struct libwebsocket_context *context,
 		break;
 
 	case LWS_CALLBACK_SERVER_WRITEABLE:
-		pthread_mutex_lock(&data_mutex);
-	        do_write = transfer.block_id > pss->block_id && should_write();
-	        pss->block_id = transfer.block_id;
-		pthread_mutex_unlock(&data_mutex);
-	        if (do_write) {
+	        if (should_write()) {
 			memset(send_buffer, 0, LWS_SEND_BUFFER_PRE_PADDING + SEND_BUFFER_SIZE + LWS_SEND_BUFFER_POST_PADDING);
-			n = sprintf(tmpbuffer, "f %u;b %u;", rtl_freq(), rtl_sample_rate());
+			n = sprintf(tmpbuffer, "f %u;b %u;s %d;", rtl_freq(), rtl_sample_rate(), sw_gain);
 			memcpy(&send_buffer[LWS_SEND_BUFFER_PRE_PADDING], tmpbuffer, n);
-			nn = write_spectrum_message(&send_buffer[LWS_SEND_BUFFER_PRE_PADDING+n], SEND_BUFFER_SIZE/2);
-
-		   // TODO: LWS_WRITE_BINARY
+		        nn = write_spectrum_message(&send_buffer[LWS_SEND_BUFFER_PRE_PADDING+n], SEND_BUFFER_SIZE/2);
 		        n = libwebsocket_write(wsi, (unsigned char *)
-				&send_buffer[LWS_SEND_BUFFER_PRE_PADDING], n+nn, LWS_WRITE_TEXT);
+				&send_buffer[LWS_SEND_BUFFER_PRE_PADDING], n+nn, LWS_WRITE_BINARY);
 		}	
 		
 	        usleep(1);
@@ -418,6 +346,9 @@ static int callback_rtl_ws(struct libwebsocket_context *context,
 			bw = atoi(&buffer[strlen(SAMPLE_RATE_CMD)])*1000;
 			printf("Trying to set sample rate to %d Hz...\n", bw);
 			rtl_set_sample_rate(bw);
+		} else if ((len >= strlen(SW_GAIN_CMD)) && strncmp(SW_GAIN_CMD, buffer, strlen(SW_GAIN_CMD)) == 0) {
+		   sw_gain = atoi(&buffer[strlen(SW_GAIN_CMD)]);
+		   printf("Software gain set to %d dB\n", sw_gain);
 		} else if ((len >= strlen(START_CMD)) && strncmp(START_CMD, buffer, strlen(START_CMD)) == 0) {
 			send_data = 1;
 			libwebsocket_callback_on_writable_all_protocol(
@@ -454,9 +385,10 @@ static struct option options[] = {
 
 int main(int argc, char **argv)
 {
-	pthread_t rtl_thread; 
-	pthread_t fm_thread;
-	char cert_path[1024];
+   //pthread_t rtl_thread; 
+	//pthread_t fm_thread;
+   int callback_id = -1;
+   char cert_path[1024];
 	char key_path[1024];
 	int n = 0;
 	int use_ssl = 0;
@@ -474,8 +406,6 @@ int main(int argc, char **argv)
 	info.port = PORT;
 
 	rtl_init(DEV_INDEX);
-	transfer.buf = NULL;
- 	transfer.block_id = 0;
 
 	spectrum = init_spectrum(FFT_POINTS);
         spectrum_temp_buffer = malloc(FFT_POINTS*2*4);
@@ -557,15 +487,19 @@ int main(int argc, char **argv)
 
 	n = 0;
 	pthread_mutex_init(&data_mutex, NULL);
-	pthread_create(&rtl_thread, NULL, rtl_worker, NULL);
-	pthread_create(&fm_thread, NULL, fm_worker, NULL);
+   start_signal_source();
+   callback_id = add_signal_callback(estimate_spectrum);
+   LOG("callback_id == %d\n", callback_id);
+   //pthread_create(&rtl_thread, NULL, rtl_worker, NULL);
+	//pthread_create(&fm_thread, NULL, fm_worker, NULL);
 
 	while (n >= 0 && !force_exit) {
 		n = libwebsocket_service(context, 50);
 	}
 	force_exit = 1;
-	usleep(100);
-
+   remove_signal_callback(callback_id);
+   stop_signal_source();
+   
 	libwebsocket_context_destroy(context);
 
 	lwsl_notice("rtl-ws-server exited\n");
@@ -575,13 +509,6 @@ int main(int argc, char **argv)
 	rtl_close();
 
 	pthread_mutex_destroy(&data_mutex);
-	pthread_exit(NULL);
-
-	if (transfer.buf != NULL) {
-		free(transfer.buf);
-		transfer.buf = NULL;
-		transfer.block_id = 0;
-	}
 
 	free(send_buffer);
 	free_spectrum(spectrum);
