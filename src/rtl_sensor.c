@@ -1,93 +1,148 @@
+#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <rtl-sdr.h>
 #include "rtl_sensor.h"
+#include "log.h"
 
-#define _RTL_DEFAULT_SAMPLE_RATE	2048000
-#define _RTL_DEFAULT_FREQUENCY 		100000000
+#define RTL_DEFAULT_SAMPLE_RATE     2048000
+#define RTL_DEFAULT_FREQUENCY       100000000
+#define RTL_DEFAULT_GAIN            25.4
 
-static rtlsdr_dev_t *dev = NULL;
-static uint32_t frequency = 0;
-static uint32_t samp_rate = 0;
-static int gain = 254;
+struct rtl_dev {
+    rtlsdr_dev_t *dev;
+    uint32_t f;
+    uint32_t fs;
+    double gain;
+};
 
-void rtl_tune(uint32_t f) 
+int rtl_init(struct rtl_dev** dev, int dev_index) 
 {
-	if (frequency == f)
-		return;
+    int r = 0;
+    DEBUG("rtl_init called with dev == %x, dev_index == %d\n", (unsigned long) dev, dev_index);
+    *dev = (struct rtl_dev*) calloc(1, sizeof(struct rtl_dev));
 
-	int r = rtlsdr_set_center_freq(dev, f);
-	if (r < 0)
-		fprintf(stderr, "WARNING: Failed to set center freq.\n");
-	else {
-		printf("Tuned to %u Hz.\n", f);
-		frequency = f;
-	}
+    if ((r = rtlsdr_open(&((*dev)->dev), dev_index)) >= 0)
+    {
+        if ((r = rtl_set_sample_rate(*dev, RTL_DEFAULT_SAMPLE_RATE)) >= 0 &&
+            (r = rtl_set_frequency(*dev, RTL_DEFAULT_FREQUENCY)) >= 0)
+        {
+            r = rtlsdr_set_tuner_gain_mode((*dev)->dev, 1);
+            if (r < 0)
+            {
+                ERROR("Failed to enable manual gain.\n");
+            }
+
+            if ((r = rtl_set_gain(*dev, RTL_DEFAULT_GAIN)) >= 0) 
+            {
+                r = rtlsdr_reset_buffer((*dev)->dev);
+                if (r < 0)
+                {
+                    ERROR("Failed to reset buffers.\n");
+                }
+            }
+        }
+    }
+    else 
+    {
+        ERROR("Failed to open rtlsdr device #%d.\n", dev_index);            
+    }
+    DEBUG("rtl_init returns %d\n", r);
+    return r;
 }
 
-void rtl_set_sample_rate(uint32_t fs) 
+int rtl_set_frequency(struct rtl_dev* dev, uint32_t f) 
 {
-	if (samp_rate == fs)
-		return;
-
-	int r = rtlsdr_set_sample_rate(dev, fs);
-	if (r < 0)
-		fprintf(stderr, "WARNING: Failed to set sample rate.\n");
-	else 
-	{
-		printf("Sample rate set to %u Hz.\n", fs);
-		samp_rate = fs;
-	}
+    int r = 0;
+    if (dev->f != f)
+    {
+        r = rtlsdr_set_center_freq(dev->dev, f);
+        if (r < 0)
+        {
+            ERROR("Failed to set center freq.\n");
+        }
+        else
+        {
+            INFO("Tuned to %u Hz.\n", f);
+            dev->f = f;
+        }
+    }
+    return r;
 }
 
-uint32_t rtl_freq() 
+int rtl_set_sample_rate(struct rtl_dev* dev, uint32_t fs) 
 {
-	return frequency;
+    int r = 0;
+    if (dev->fs != fs)
+    {
+        r = rtlsdr_set_sample_rate(dev->dev, fs);
+        if (r < 0)
+        {
+            ERROR("Failed to set sample rate.\n");
+        }
+        else 
+        {
+            INFO("Sample rate set to %u Hz.\n", fs);
+            dev->fs = fs;
+        }
+    }
+    return r;
 }
 
-uint32_t rtl_sample_rate() 
+int rtl_set_gain(struct rtl_dev* dev, double gain)
 {
-	return samp_rate;
+    int r = 0;
+    if (dev->gain != gain)
+    {
+        r = rtlsdr_set_tuner_gain(dev->dev, (int) (gain * 10));
+        if (r < 0)
+        {
+            ERROR("Failed to set tuner gain.\n");
+        }
+        else
+        {
+            INFO("Tuner gain set to %f dB.\n", gain);
+            dev->gain = gain;        
+        }
+    }
+    return r;
 }
 
-int rtl_init(int dev_index) 
+uint32_t rtl_freq(const struct rtl_dev* dev) 
 {
-	int r = rtlsdr_open(&dev, dev_index);
-	if (r < 0) {
-		fprintf(stderr, "Failed to open rtlsdr device #%d.\n", dev_index);
-		return -1;
-	}
-
-	rtl_set_sample_rate(_RTL_DEFAULT_SAMPLE_RATE);   
-	rtl_tune(_RTL_DEFAULT_FREQUENCY);
-
-	r = rtlsdr_set_tuner_gain_mode(dev, 1);
-	if (r < 0)
-		fprintf(stderr, "WARNING: Failed to enable manual gain.\n");
-
-        /* Set the tuner gain */
-	r = rtlsdr_set_tuner_gain(dev, gain);
-	if (r < 0)
-		fprintf(stderr, "WARNING: Failed to set tuner gain.\n");
-	else
-		fprintf(stderr, "Tuner gain set to %f dB.\n", gain/10.0);
-
-	/* Reset endpoint before we start reading from it (mandatory) */
-	r = rtlsdr_reset_buffer(dev);
-	if (r < 0)
-		fprintf(stderr, "WARNING: Failed to reset buffers.\n");
-
-	return 0;
+    return dev->f;
 }
 
-int rtl_read(char* buffer, int buf_len, int* n_read) {
-	return rtlsdr_read_sync(dev, buffer, buf_len, n_read);
+uint32_t rtl_sample_rate(const struct rtl_dev* dev) 
+{
+    return dev->fs;
 }
 
-void rtl_cancel() {
-	if (dev != NULL)
-		rtlsdr_cancel_async(dev);
+double rtl_gain(const struct rtl_dev* dev)
+{
+    return dev->gain;
 }
 
-void rtl_close() {
-	rtlsdr_close(dev);
+int rtl_read(struct rtl_dev* dev, char* buffer, int buf_len, int* n_read)
+{
+    return rtlsdr_read_sync(dev->dev, buffer, buf_len, n_read);
+}
+
+void rtl_cancel(struct rtl_dev* dev)
+{
+    if (dev->dev != NULL)
+    {
+        rtlsdr_cancel_async(dev->dev);
+    }
+}
+
+void rtl_close(struct rtl_dev* dev) 
+{
+    DEBUG("rtl_close called with dev == %x\n", (unsigned long) dev);
+    if (dev->dev != NULL)
+    {
+        rtlsdr_close(dev->dev);
+        free(dev);
+    }
+    DEBUG("rtl_close returns\n");
 }

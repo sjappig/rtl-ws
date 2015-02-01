@@ -1,17 +1,18 @@
 #ifndef _COMMON_SP_H
 #define _COMMON_SP_H
+
 #include <stdint.h>
 
 typedef struct 
 {
-   uint8_t re;
-   uint8_t im;
+    uint8_t re;
+    uint8_t im;
 } cmplx;
 
 typedef struct 
 {
-   int32_t re;
-   int32_t im;
+    int32_t re;
+    int32_t im;
 } cmplx_s32;
 
 void set_cmplx(cmplx* dst, uint8_t re, uint8_t im);

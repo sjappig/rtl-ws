@@ -1,24 +1,18 @@
 SRCDIR=src
 BUILDDIR=build
 VPATH=$(SRCDIR)
-#GPP=g++ -std=c++0x
 GCC=gcc
+PPDEFS=-DRTL_WS_DEBUG
 PROGRAM=$(BUILDDIR)/rtl-ws-server
 CSOURCEFILES=$(shell ls $(SRCDIR)/*.c)
 COBJFILES=$(subst .c,.o,$(subst $(SRCDIR),$(BUILDDIR),$(CSOURCEFILES)))
-#CPPSOURCEFILES=$(shell ls $(SRCDIR)/*.cpp)
-#CPPOBJFILES=$(subst .cpp,.o,$(subst $(SRCDIR),$(BUILDDIR),$(CPPSOURCEFILES)))
-
-#define compilecpp
-#$(GPP) -c -B $(SRCDIR) $< -o $@
-#endef
 
 define compilec
-$(GCC) -c -B $(SRCDIR) $< -o $@
+$(GCC) $(PPDEFS) -c -B $(SRCDIR) $< -o $@
 endef
 
 define link
-$(GCC) $^ -lpthread -lwebsockets -lrtlsdr -lfftw3 -o $@
+$(GCC) $^ -lpthread -lwebsockets -lrtlsdr -lrt -lm -lfftw3 -o $@
 endef
 
 .PHONY: all build prepare clean
@@ -32,9 +26,6 @@ $(PROGRAM): $(COBJFILES) $(CPPOBJFILES)
 
 $(BUILDDIR)/%.o: %.c | prepare
 	$(compilec)
-
-#$(BUILDDIR)/%.o: %.cpp | prepare
-#	$(compilecpp)
 
 prepare:
 	mkdir -p $(BUILDDIR)

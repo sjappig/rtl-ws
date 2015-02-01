@@ -1,21 +1,32 @@
 #ifndef RTL_SENSOR_H
 #define RTL_SENSOR_H
+
 #include <stdint.h>
 
-void rtl_tune(uint32_t f);
+struct rtl_dev;
 
-void rtl_set_sample_rate(uint32_t fs);
+int rtl_init(struct rtl_dev** dev, int dev_index);
 
-uint32_t rtl_freq();
 
-uint32_t rtl_sample_rate();
+int rtl_set_frequency(struct rtl_dev* dev, uint32_t f);
 
-int rtl_init(int dev_index);
+int rtl_set_sample_rate(struct rtl_dev* dev, uint32_t fs);
 
-int rtl_read(char* buffer, int buf_len, int* n_read);
+int rtl_set_gain(struct rtl_dev* dev, double gain);
 
-void rtl_cancel();
 
-void rtl_close();
+uint32_t rtl_freq(const struct rtl_dev* dev);
+
+uint32_t rtl_sample_rate(const struct rtl_dev* dev);
+
+double rtl_gain(const struct rtl_dev* dev);
+
+
+int rtl_read(struct rtl_dev* dev, char* buffer, int buf_len, int* n_read);
+
+
+void rtl_cancel(struct rtl_dev* dev);
+
+void rtl_close(struct rtl_dev* dev);
 
 #endif
