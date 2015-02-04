@@ -23,7 +23,7 @@ spectrum_handle init_spectrum(int N)
     return (spectrum_handle) h;
 }
 
-int add_spectrum(spectrum_handle handle, const cmplx* src, double* dst, int len, double linear_energy_gain)
+int add_spectrum(spectrum_handle handle, const cmplx_u8* src, double* dst, int len, double linear_energy_gain)
 {
     _spectrum_handle* h = (_spectrum_handle*) handle;
     if (len != h->N)

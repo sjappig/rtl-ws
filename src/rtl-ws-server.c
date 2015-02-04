@@ -71,7 +71,7 @@ static char *resource_path = LOCAL_RESOURCE_PATH;
 static double power_spectrum_transfer[FFT_POINTS] = {0};
 static int spectrum_averaging_count = 0;
 
-void log_data_rate(const cmplx* complex_signal, int len)
+void log_data_rate(const cmplx_u8* complex_signal, int len)
 {
     static uint64_t samples = 0;
     static struct timespec tv_start = { 0, 0 };
@@ -95,16 +95,7 @@ void log_data_rate(const cmplx* complex_signal, int len)
     }
 }
 
-int should_write()
-{
-    if ((spectrum_timestamp + 250) < timestamp())
-    {
-        return 1;
-    }
-    return 0;
-}
-
-void estimate_spectrum(const cmplx* complex_signal, int len)
+void estimate_spectrum(const cmplx_u8* complex_signal, int len)
 {
     static double power_spectrum[FFT_POINTS];
     int i = 0;
@@ -161,6 +152,15 @@ int write_spectrum_message(char* buf, int buf_len)
     return len;
 }
 
+int should_send_spectrum()
+{
+    if ((spectrum_timestamp + 250) < timestamp())
+    {
+        return 1;
+    }
+    return 0;
+}
+
 static int callback_rtl_ws(struct libwebsocket_context *context,
     struct libwebsocket *wsi, enum libwebsocket_callback_reasons reason, 
     void *user, void *in, size_t len)
@@ -198,7 +198,7 @@ static int callback_rtl_ws(struct libwebsocket_context *context,
             break;
 
             case LWS_CALLBACK_SERVER_WRITEABLE:
-            if (should_write()) 
+            if (should_send_spectrum()) 
             {
                 memset(send_buffer, 0, LWS_SEND_BUFFER_PRE_PADDING + SEND_BUFFER_SIZE + LWS_SEND_BUFFER_POST_PADDING);
                 n = sprintf(tmpbuffer, "f %u;b %u;s %d;", rtl_freq(dev), rtl_sample_rate(dev), sw_gain);
