@@ -36,8 +36,8 @@
 #define FFT_AVERAGE         4
 #define PORT                80
 #define LOCAL_RESOURCE_PATH "../resources"
-#define LOG_RATE_MS         10000
-#define DOWNFACTOR         10
+#define LOG_RATE_MS         30000
+#define DOWNFACTOR          10
 
 
 struct per_session_data__rtl_ws {
@@ -172,7 +172,6 @@ int should_send_spectrum()
 
 void channel_handler(const cmplx_s32* signal, int len)
 {
-    /*
     static double energy = 0;
     static struct timespec tv_start = { 0, 0 };
     static struct timespec tv_end = { 0, 0 };
@@ -198,8 +197,7 @@ void channel_handler(const cmplx_s32* signal, int len)
         DEBUG("Channel power: %f dB\n", 10*log10((energy/diff_ms) * 1000));
         energy = 0;
         memset(&tv_start, 0, sizeof(struct timespec));
-    }*/
-
+    }
 }
 
 static int callback_rtl_ws(struct libwebsocket_context *context,
