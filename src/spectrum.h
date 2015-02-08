@@ -4,12 +4,12 @@
 #include <stdint.h>
 #include "common_sp.h"
 
-typedef void* spectrum_handle;
+struct spectrum;
 
-spectrum_handle init_spectrum(int N);
+struct spectrum* spectrum_alloc(int N);
 
-int add_spectrum(spectrum_handle handle, const cmplx_u8* src, double* dst, int len, double linear_energy_gain);
+int spectrum_add_u8(struct spectrum* s, const cmplx_u8* src, double* power_spectrum, int len);
 
-void free_spectrum(spectrum_handle handle);
+void spectrum_free(struct spectrum* s);
 
 #endif

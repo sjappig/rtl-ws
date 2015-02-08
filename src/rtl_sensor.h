@@ -24,6 +24,7 @@ double rtl_gain(const struct rtl_dev* dev);
 
 int rtl_read(struct rtl_dev* dev, char* buffer, int buf_len, int* n_read);
 
+int rtl_read_async(struct rtl_dev* dev, void (*callback)(unsigned char*, uint32_t, void*), void* user);
 
 void rtl_cancel(struct rtl_dev* dev);
 

@@ -4,26 +4,29 @@
 #include <pthread.h>
 #include "signal_source.h"
 #include "rtl_sensor.h"
+#include "list.h"
 #include "log.h"
 
+#define BUFFER_SIZE 163840
 
-struct _callback_node
+struct signal_holder
 {
-    int id;
-    SIGNAL_CALLBACK func;
-    struct _callback_node* next;
+    const cmplx_u8* signal;
+    int len;
 };
-
 
 static pthread_t worker_thread;
 static pthread_mutex_t callback_mutex;
-static struct _callback_node* root = NULL;
+static struct list* callback_list = NULL;
 static volatile int running = 0;
 
+static void rtl_async_callback(unsigned char* buf, uint32_t len, void* ctx);
 
 static void notify_callbacks(const cmplx_u8* complex_signal, int len);
 
 static void* worker(void* user);
+
+static void callback_notifier(void* callback, void* signal);
 
 void start_signal_source(struct rtl_dev* dev)
 {
@@ -32,120 +35,76 @@ void start_signal_source(struct rtl_dev* dev)
         return;
 
     running = 1;
+    callback_list = list_alloc();
     pthread_mutex_init(&callback_mutex, NULL);
-    pthread_create(&worker_thread, NULL, worker, dev);   
+    pthread_create(&worker_thread, NULL, worker, dev);
     DEBUG("Signal source started.\n");
 }
 
-int add_signal_callback(SIGNAL_CALLBACK callback)
+void add_signal_callback(SIGNAL_CALLBACK callback)
 {
-    struct _callback_node* node = NULL;
     pthread_mutex_lock(&callback_mutex);
-    node = root;
-    if (node != NULL)
-    {
-        while (node->next != NULL)
-        {
-            node = node->next;
-        }
-        node->next = (struct _callback_node*) calloc(1, sizeof(struct _callback_node));
-        node->next->id = node->id + 1;
-        node->next->func = callback;
-        node = node->next;
-    }
-    else
-    {
-        root = (struct _callback_node*) calloc(1, sizeof(struct _callback_node));
-        root->id = 0;
-        root->func = callback;
-        node = root;
-    }   
+    list_add(callback_list, callback);
     pthread_mutex_unlock(&callback_mutex);
-    return node->id;
 }
 
-SIGNAL_CALLBACK remove_signal_callback(int id)
+void remove_signal_callbacks()
 {
-    struct _callback_node* node = NULL;
-    struct _callback_node* prev = NULL;
-    SIGNAL_CALLBACK result = NULL;
     pthread_mutex_lock(&callback_mutex);
-    node = root;
-    while (node != NULL)
-    {
-        if (node->id == id)
-        {
-            if (prev == NULL)
-            {
-                root = node->next;
-            }
-            else
-            {
-                prev->next = node->next;
-            }
-            node->next = NULL;
-            result = node->func;
-            free(node);
-            break;
-        }
-        prev = node;
-        node = node->next;
-    }   
+    list_clear(callback_list);
     pthread_mutex_unlock(&callback_mutex);
-    return result;
 }
 
-void stop_signal_source()
+void stop_signal_source(struct rtl_dev* dev)
 {
     DEBUG("Stopping signal source...\n");
     if (!running)
         return;
 
     running = 0;
+    rtl_cancel(dev);
     pthread_join(worker_thread, NULL);
     pthread_mutex_destroy(&callback_mutex);
+    list_free(callback_list);
+    callback_list = NULL;
     DEBUG("Signal source stopped.\n");
 }
 
-
-
 static void notify_callbacks(const cmplx_u8* complex_signal, int len)
 {
-    struct _callback_node* node = NULL;
     pthread_mutex_lock(&callback_mutex);
-    node = root;
-    while (node != NULL)
-    {
-        node->func(complex_signal, len);
-        node = node->next;
-    }   
+    struct signal_holder s_h = { complex_signal, len };
+    list_apply(callback_list, callback_notifier, &s_h);
     pthread_mutex_unlock(&callback_mutex);
 }
 
 static void* worker(void* user)
 {
     int status = 0;
-    int n_read = 0;
-    uint32_t out_block_size = 262144;
-    uint8_t* buffer = (uint8_t*) calloc(out_block_size, sizeof(uint8_t));
     struct rtl_dev* dev = (struct rtl_dev*) user;
 
     DEBUG("Entering signal source work loop\n");
     while (running)
-    {      
-        n_read = 0;
-        status = rtl_read(dev, buffer, out_block_size, &n_read);
-        n_read = n_read > out_block_size ? out_block_size : n_read;
-        
-        if (status < 0) 
-        {    
-            ERROR("Read failed. Exiting work loop.\n");
+    {
+        status = rtl_read_async(dev, rtl_async_callback, NULL);
+        if (status < 0)
+        {
+            ERROR("Read failed with status %d\n", status);
             break;
         }
-
-        notify_callbacks((cmplx_u8*) buffer, n_read / 2);      
     }
     DEBUG("Exited signal source work loop\n");
-    free(buffer);
-    return NULL; 
+    return NULL;
+}
+
+static void rtl_async_callback(unsigned char* buf, uint32_t len, void* ctx)
+{
+    notify_callbacks((cmplx_u8*) buf, len / 2);
+}
+
+static void callback_notifier(void* callback, void* signal)
+{
+    SIGNAL_CALLBACK f = (SIGNAL_CALLBACK) callback;
+    struct signal_holder* s_h = (struct signal_holder*) signal;
+    f(s_h->signal, s_h->len);
 }

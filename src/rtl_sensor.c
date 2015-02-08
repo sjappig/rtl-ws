@@ -27,12 +27,14 @@ int rtl_init(struct rtl_dev** dev, int dev_index)
         if ((r = rtl_set_sample_rate(*dev, RTL_DEFAULT_SAMPLE_RATE)) >= 0 &&
             (r = rtl_set_frequency(*dev, RTL_DEFAULT_FREQUENCY)) >= 0)
         {
+            DEBUG("Setting rtl gain mode to manual...\n");
             r = rtlsdr_set_tuner_gain_mode((*dev)->dev, 1);
             if (r < 0)
             {
                 ERROR("Failed to enable manual gain.\n");
             }
-
+            
+            DEBUG("Setting rtl gain to %f...\n", RTL_DEFAULT_GAIN);
             if ((r = rtl_set_gain(*dev, RTL_DEFAULT_GAIN)) >= 0) 
             {
                 r = rtlsdr_reset_buffer((*dev)->dev);
@@ -126,6 +128,11 @@ double rtl_gain(const struct rtl_dev* dev)
 int rtl_read(struct rtl_dev* dev, char* buffer, int buf_len, int* n_read)
 {
     return rtlsdr_read_sync(dev->dev, buffer, buf_len, n_read);
+}
+
+int rtl_read_async(struct rtl_dev* dev, void (*callback)(unsigned char*, uint32_t, void*), void* user)
+{
+    return rtlsdr_read_async(dev->dev, (rtlsdr_read_async_cb_t) callback, user, 0, 0);
 }
 
 void rtl_cancel(struct rtl_dev* dev)

@@ -11,10 +11,10 @@ typedef void (*SIGNAL_CALLBACK)(const cmplx_u8*,int);
 
 void start_signal_source(struct rtl_dev* dev);
 
-int add_signal_callback(SIGNAL_CALLBACK callback);
+void add_signal_callback(SIGNAL_CALLBACK callback);
 
-SIGNAL_CALLBACK remove_signal_callback(int id);
+void remove_signal_callbacks();
 
-void stop_signal_source();
+void stop_signal_source(struct rtl_dev* dev);
 
 #endif
