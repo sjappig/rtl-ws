@@ -15,14 +15,14 @@ typedef struct
     int32_t im;
 } cmplx_s32;
 
-void set_cmplx_u8(cmplx_u8* dst, uint8_t re, uint8_t im);
+#define set_cmplx_u8(dst, re, im) dst.re = re; dst.im = im;
 
-void set_cmplx_s32(cmplx_s32* dst, const cmplx_s32* src);
+#define set_cmplx_s32(dst, src) *((int64_t*) &dst) = *((int64_t*) &src);
 
-void set_cmplx_s32_cmplx_u8(cmplx_s32* dst, const cmplx_u8* src, int32_t transform);
+#define set_cmplx_s32_cmplx_u8(dst, src, transform) dst.re = transform + src.re; dst.im = transform + src.im;
 
-void add(const cmplx_s32* a, const cmplx_s32* b, cmplx_s32* result);
+#define add_cmplx_s32(a, b, result) result.re = a.re + b.re; result.im = a.im + b.im;
 
-void sub(const cmplx_s32* a, const cmplx_s32* b, cmplx_s32* result);
+#define sub_cmplx_s32(a, b, result) result.re = a.re - b.re; result.im = a.im - b.im;
 
 #endif
