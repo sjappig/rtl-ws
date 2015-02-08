@@ -1,5 +1,4 @@
 #include <stdint.h>
-#include <arm_neon.h>
 #include "resample.h"
 
 int cic_decimate(int R, const cmplx_u8* src, int src_len, cmplx_s32* dst, int dst_len)
@@ -10,7 +9,6 @@ int cic_decimate(int R, const cmplx_u8* src, int src_len, cmplx_s32* dst, int ds
     cmplx_s32 integrator_curr_out = { 0, 0};
     cmplx_s32 integrator_prev_out = { 0, 0};
     cmplx_s32 comb_prev_in = { 0, 0};
-    //uint8x8_t test;
 
     if (dst_len * R != src_len)
         return -1;

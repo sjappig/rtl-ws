@@ -94,11 +94,11 @@ int decimator_decimate_cmplx_u8(struct decimator* d, const cmplx_u8* complex_sig
         remaining -= block_size;
         current_idx += block_size;
 
-        /*if (cic_decimate(d->down_factor, d->input_signal, d->input_signal_len, d->resampled_signal, d->resampled_signal_len)) 
+        if (cic_decimate(d->down_factor, d->input_signal, d->input_signal_len, d->resampled_signal, d->resampled_signal_len)) 
         {
             ERROR("Error while decimating signal");
             return -2;
-        }*/
+        }
 
         list_apply(d->callback_list, callback_notifier, d);
 

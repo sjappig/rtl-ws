@@ -94,7 +94,7 @@ void log_data_rate(const cmplx_u8* complex_signal, int len)
 
     if (diff_ms > LOG_RATE_MS)
     {
-        DEBUG("Current sample rate: %llu samples / %llu ms : %llu kHz\n", samples, diff_ms, samples/diff_ms);
+        DEBUG("Current sample rate: %llu kHz\n", samples/diff_ms);
         samples = 0;
     }
 }
@@ -172,7 +172,8 @@ int should_send_spectrum()
 
 void channel_handler(const cmplx_s32* signal, int len)
 {
-    /*static double energy = 0;
+    /*
+    static double energy = 0;
     static struct timespec tv_start = { 0, 0 };
     static struct timespec tv_end = { 0, 0 };
     static uint64_t diff_ms = 0;
