@@ -9,20 +9,31 @@ typedef struct
     uint8_t im;
 } cmplx_u8;
 
-typedef struct 
+typedef union 
 {
-    int32_t re;
-    int32_t im;
+    int64_t bulk;
+    struct p {
+        int32_t re;
+        int32_t im;
+    } p;
 } cmplx_s32;
 
 #define set_cmplx_u8(dst, re, im) dst.re = re; dst.im = im;
 
-#define set_cmplx_s32(dst, src) *((int64_t*) &dst) = *((int64_t*) &src);
+#define set_cmplx_s32(dst, src) dst.bulk = src.bulk; 
 
-#define set_cmplx_s32_cmplx_u8(dst, src, transform) dst.re = transform + src.re; dst.im = transform + src.im;
+#define set_cmplx_s32_cmplx_u8(dst, src, transform) dst.p.re = transform + src.re; dst.p.im = transform + src.im;
 
-#define add_cmplx_s32(a, b, result) result.re = a.re + b.re; result.im = a.im + b.im;
+#define add_cmplx_s32(a, b, result) result.p.re = a.p.re + b.p.re; result.p.im = a.p.im + b.p.im;
 
-#define sub_cmplx_s32(a, b, result) result.re = a.re - b.re; result.im = a.im - b.im;
+#define sub_cmplx_s32(a, b, result) result.p.re = a.p.re - b.p.re; result.p.im = a.p.im - b.p.im;
+
+#define real_cmplx_s32(c) (c.p.re)
+
+#define imag_cmplx_s32(c) (c.p.im)
+
+#define real_cmplx_u8(c) (c.re)
+
+#define imag_cmplx_u8(c) (c.im)
 
 #endif

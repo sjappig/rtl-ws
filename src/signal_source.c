@@ -22,7 +22,7 @@ static volatile int running = 0;
 
 static void rtl_async_callback(unsigned char* buf, uint32_t len, void* ctx);
 
-static void notify_callbacks(const cmplx_u8* complex_signal, int len);
+static void notify_callbacks(const cmplx_u8* signal, int len);
 
 static void* worker(void* user);
 
@@ -70,10 +70,10 @@ void stop_signal_source(struct rtl_dev* dev)
     DEBUG("Signal source stopped.\n");
 }
 
-static void notify_callbacks(const cmplx_u8* complex_signal, int len)
+static void notify_callbacks(const cmplx_u8* signal, int len)
 {
     pthread_mutex_lock(&callback_mutex);
-    struct signal_holder s_h = { complex_signal, len };
+    struct signal_holder s_h = { signal, len };
     list_apply(callback_list, callback_notifier, &s_h);
     pthread_mutex_unlock(&callback_mutex);
 }

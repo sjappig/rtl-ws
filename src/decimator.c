@@ -64,7 +64,7 @@ int decimator_set_parameters(struct decimator* d, double sample_rate, int down_f
             d->down_factor = down_factor;
             d->resampled_signal_len = (int) ((d->sample_rate / d->down_factor) * INTERNAL_BUF_LEN_MS / 1000);
             d->input_signal_len = d->resampled_signal_len * d->down_factor;
-
+            
             d->resampled_signal = (cmplx_s32*) calloc(d->resampled_signal_len, sizeof(cmplx_s32));
             d->input_signal = (cmplx_u8*) calloc(d->input_signal_len, sizeof(cmplx_u8*));
 
@@ -92,7 +92,7 @@ int decimator_decimate_cmplx_u8(struct decimator* d, const cmplx_u8* complex_sig
 
     while (remaining >= block_size)
     {
-        memcpy(&(d->input_signal[d->surplus]), &(complex_signal[current_idx]), block_size);
+        memcpy(&(d->input_signal[d->surplus]), &(complex_signal[current_idx]), block_size * sizeof(cmplx_u8));
         remaining -= block_size;
         current_idx += block_size;
 
@@ -110,7 +110,7 @@ int decimator_decimate_cmplx_u8(struct decimator* d, const cmplx_u8* complex_sig
     
     if (remaining > 0)
     {
-        memcpy(&(d->input_signal[d->surplus]), &(complex_signal[len - remaining]), remaining);
+        memcpy(&(d->input_signal[d->surplus]), &(complex_signal[len - remaining]), remaining * sizeof(cmplx_u8));
         d->surplus += remaining;
     }
     pthread_mutex_unlock(&(d->mutex));

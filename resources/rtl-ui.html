@@ -1,55 +1,77 @@
 <!DOCTYPE HTML>
 <html>
 <head>
-	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-	<meta charset="utf-8" http-equiv="Content-Language" content="en" />
-	<title>RTL-WS</title>
-	<style type="text/css">
-		.group2 { vertical-align:middle; text-align:center; background:#f0f0e0; padding:12px; -webkit-border-radius:10px; -moz-border-radius:10px; border-radius:10px; }
-		.canvas { vertical-align:top; text-align:center; background:#efefd0; padding:12px; -webkit-border-radius:10px; -moz-border-radius:10px; border-radius:10px; }
-	</style>
-	<script src="/rtl_ui.js"></script>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta charset="utf-8" http-equiv="Content-Language" content="en" />
+    <title>RTL-WS</title>
+    <style type="text/css">
+    .group2 { vertical-align:middle; text-align:center; background:#f0f0e0; padding:12px; -webkit-border-radius:10px; -moz-border-radius:10px; border-radius:10px; }
+    .canvas { vertical-align:top; text-align:center; background:#efefd0; padding:12px; -webkit-border-radius:10px; -moz-border-radius:10px; border-radius:10px; }
+    </style>
+    <script src="/rtl_ui.js"></script>
 </head>
 
 <body onload="initialize();">
 
-	<table class="content" border="0">
-		<tbody>
-			<tr>
-				<td width="525" class="group2">
-					<table>
-						<tr>
-							<td width="250">
-								<input style="float: left" type="submit" id="start_or_stop" onclick="start_or_stop();" value="start" />
-							</td>
-							<td>
-								Frequency: <input size="8" type="text" id="frequency" onchange="frequency_change();" value="100000" /> kHz<br />
-							</td>
-						</tr>
-						<tr>
-							<td>
-							</td>
-							<td>
-								Bandwidth: <input size="8" type="text" id="bandwidth" onchange="bw_change();" value="2048" /> kHz
-							</td>
-						</tr>
-						<tr>
-							<td>
-							</td>
-							<td>
-								SW gain: <input size="8" type="text" id="swgain" onchange="swgain_change();" value="0" /> dB
-							</td>
-						</tr>
-					</table>
-				</td>
-				<td width="525" class="group2" id="ws_status" style="background-color: rgb(255, 64, 64);"><div id="wslm_status"> not initialized </div></td>
-			</tr>
-			<tr>
-				<td class="canvas" colspan="2" height="520" width="1050">
-					<div id="spectrum">
-					</div></td>
-				</tr>
-			</tbody>
-		</table>
+    <table class="content" border="0">
+        <tbody>
+            <tr>
+                <td class="group2">
+                    <table>
+                        <tr>
+                            <td width="250">
+                                <img id="ws_status" style="float: left" src="connect2_help.png" />
+                            </td>
+                            <td>
+                                <table>
+                                <tr>
+                                    <td>
+                                        Frequency:
+                                    </td>
+                                    <td>
+                                        <input size="8" type="text" id="frequency" onchange="frequency_change();" value="100000" />
+                                    </td>
+                                    <td>
+                                        kHz
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        Bandwidth:
+                                    </td>
+                                    <td>
+                                        <input size="8" type="text" id="bandwidth" onchange="bw_change();" value="2048" />
+                                    </td>
+                                    <td>
+                                        kHz
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        Spectrum gain:
+                                    </td>
+                                    <td>
+                                        <input size="8" type="text" id="spectrumgain" onchange="spectrumgain_change();" value="0" />
+                                    </td>
+                                    <td>
+                                        dB
+                                    </td>
+                                </tr>
+                            </table>
+                            </td>
+                            <td width="500">
+                                <input style="float: right" type="submit" id="start_or_stop" onclick="start_or_stop();" value="start" />
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+            <tr>
+                <td class="canvas" colspan="2" height="520" width="1050">
+                    <div id="spectrum">
+                    </div></td>
+                </tr>
+            </tbody>
+        </table>
 
-</body></html>
+    </body></html>

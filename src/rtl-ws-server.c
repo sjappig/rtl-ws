@@ -22,6 +22,7 @@
 #include "log.h"
 #include "http_handler.h"
 #include "decimator.h"
+#include "cordic.h"
 
 #define DEV_INDEX           0
 
@@ -29,16 +30,17 @@
 #define SEND_BUFFER_SIZE    16384
 #define FREQ_CMD            "freq"
 #define SAMPLE_RATE_CMD     "bw"
-#define SW_GAIN_CMD         "swgain"
+#define SPECTRUM_GAIN_CMD   "spectrumgain"
 #define START_CMD           "start"
 #define STOP_CMD            "stop"
 #define FFT_POINTS          1024
+#define SPECTRUM_EST_MS     100
 #define FFT_AVERAGE         4
 #define PORT                80
 #define LOCAL_RESOURCE_PATH "../resources"
 #define LOG_RATE_MS         30000
 #define DOWNFACTOR          10
-
+#define CORDIC_ORDER        4
 
 struct per_session_data__rtl_ws {
     int id;
@@ -63,7 +65,7 @@ static int latest_user_id = 1;
 
 static volatile int send_data = 0;
 static volatile int force_exit = 0;
-static volatile int sw_gain = 0;
+static volatile int spectrum_gain = 0;
 static volatile uint64_t spectrum_timestamp = 0;
 
 static pthread_mutex_t data_mutex;
@@ -74,8 +76,12 @@ static struct decimator* decim = NULL;
 static char *resource_path = LOCAL_RESOURCE_PATH;
 static double power_spectrum_transfer[FFT_POINTS] = {0};
 static int spectrum_averaging_count = 0;
+static uint64_t last_spectrum_estimation = 0;
 
-void log_data_rate(const cmplx_u8* complex_signal, int len)
+static double* demod_buffer = NULL;
+static int demod_buffer_len = 0;
+
+static inline log_data_rate_private(int sample_count)
 {
     static uint64_t samples = 0;
     static struct timespec tv_start = { 0, 0 };
@@ -89,7 +95,7 @@ void log_data_rate(const cmplx_u8* complex_signal, int len)
 
     clock_gettime(CLOCK_MONOTONIC, &tv_end);
 
-    samples += len;
+    samples += sample_count;
     diff_ms = (tv_end.tv_sec-tv_start.tv_sec)*1000 + ((tv_end.tv_nsec-tv_start.tv_nsec)/1000)/1000;
 
     if (diff_ms > LOG_RATE_MS)
@@ -99,28 +105,38 @@ void log_data_rate(const cmplx_u8* complex_signal, int len)
     }
 }
 
-void decimate(const cmplx_u8* complex_signal, int len)
+void log_data_rate(const cmplx_u8* signal, int len)
 {
-    decimator_decimate_cmplx_u8(decim, complex_signal, len);
+    log_data_rate_private(len);
 }
 
-void estimate_spectrum(const cmplx_u8* complex_signal, int len)
+void decimate(const cmplx_u8* signal, int len)
+{
+    decimator_decimate_cmplx_u8(decim, signal, len);
+}
+
+void estimate_spectrum(const cmplx_u8* signal, int len)
 {
     static double power_spectrum[FFT_POINTS];
     int i = 0;
     int blocks = len / FFT_POINTS;
+
+    if (timestamp() < (last_spectrum_estimation + SPECTRUM_EST_MS))
+        return;
+
     blocks = blocks <= FFT_AVERAGE ? blocks : FFT_AVERAGE;
     memset(power_spectrum, 0, FFT_POINTS*sizeof(double));
 
     for (i = 0; i < blocks; i++)
     {
-        if (spectrum_add_u8(spect, &(complex_signal[i*FFT_POINTS]), power_spectrum, FFT_POINTS))
+        if (spectrum_add_cmplx_u8(spect, &(signal[i*FFT_POINTS]), power_spectrum, FFT_POINTS))
         {
             ERROR("Error while estimating spectrum.\n");
             return;
         }
     }
 
+    last_spectrum_estimation = timestamp();
     pthread_mutex_lock(&data_mutex);
 
     memcpy(power_spectrum_transfer, power_spectrum, FFT_POINTS*sizeof(double));
@@ -135,7 +151,7 @@ int write_spectrum_message(char* buf, int buf_len)
     int spectrum_averaging_count_local = 0;
     int idx = 0;
     int len = 0;
-    double linear_energy_gain = pow(10, sw_gain/10);
+    double linear_energy_gain = pow(10, spectrum_gain/10);
 
     pthread_mutex_lock(&data_mutex);
 
@@ -170,34 +186,93 @@ int should_send_spectrum()
     return 0;
 }
 
-void channel_handler(const cmplx_s32* signal, int len)
+void estimate_real_spectrum(const double* signal, int len)
 {
-    static double energy = 0;
-    static struct timespec tv_start = { 0, 0 };
-    static struct timespec tv_end = { 0, 0 };
-    static uint64_t diff_ms = 0;
+    static double power_spectrum[FFT_POINTS];
     int i = 0;
+    int blocks = len / FFT_POINTS;
+    blocks = blocks <= FFT_AVERAGE ? blocks : FFT_AVERAGE;
+    memset(power_spectrum, 0, FFT_POINTS*sizeof(double));
 
-    if (tv_start.tv_sec == 0)
+    //log_data_rate_private(len);
+    for (i = 0; i < blocks; i++)
     {
-        clock_gettime(CLOCK_MONOTONIC, &tv_start);
+        if (spectrum_add_real_f64(spect, &(signal[i*FFT_POINTS]), power_spectrum, FFT_POINTS))
+        {
+            ERROR("Error while estimating spectrum.\n");
+            return;
+        }
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &tv_end);
+    pthread_mutex_lock(&data_mutex);
+
+    memcpy(power_spectrum_transfer, power_spectrum, FFT_POINTS*sizeof(double));
+    spectrum_averaging_count = blocks;
+
+    pthread_mutex_unlock(&data_mutex);
+}
+
+void fm_demodulator(const cmplx_s32* signal, int len)
+{
+    static double prev_sample = 0;
+    double temp = 0;
+    int i = 0;
+    //float I = 0;
+    //float Q = 0;
+    //double sum = 0;
+    //double sumQ = 0;
+
+    if (demod_buffer_len < len)
+    {
+        DEBUG("Allocating demodulation buffer...\n");
+        if (demod_buffer != NULL)
+            free(demod_buffer);
+
+        demod_buffer = (double*) calloc(len, sizeof(double));
+        demod_buffer_len = len;
+    }
 
     for (i = 0; i < len; i++)
     {
-        energy += (signal[i].re*signal[i].re + signal[i].im*signal[i].im);
+       // I = signal[i].re;
+        //Q = signal[i].im;
+        cordic_get_mag_phase(real_cmplx_s32(signal[i]), imag_cmplx_s32(signal[i]), NULL, &(demod_buffer[i]));
+        //temp = demod_buffer[i];
+        //demod_buffer[i] = prev_sample - demod_buffer[i];
+        //prev_sample = temp;
+        //sum += demod_buffer[i];
+        //sumQ += Q;
     }
+    //INFO("Sum for %d demod samples: %f (first %f, middle %f, last %f, average %f)\n", len, sum, demod_buffer[0], demod_buffer[len/2], demod_buffer[len-1], sum/len);
+    //INFO("Sum for %d imag samples: %f (first %d, middle %d, last %d, average %f)\n", len, sumQ, signal[0].im, signal[len/2].im, signal[len-1].im, sumQ/len);
 
-    diff_ms = (tv_end.tv_sec-tv_start.tv_sec)*1000 + ((tv_end.tv_nsec-tv_start.tv_nsec)/1000)/1000;
+    //estimate_real_spectrum(demod_buffer, len);
+}
 
-    if (diff_ms > LOG_RATE_MS)
+void estimate_decimated_spectrum(const cmplx_s32* signal, int len)
+{
+    /*
+    static double power_spectrum[FFT_POINTS];
+    int i = 0;
+    int blocks = len / FFT_POINTS;
+    blocks = blocks <= FFT_AVERAGE ? blocks : FFT_AVERAGE;
+    memset(power_spectrum, 0, FFT_POINTS*sizeof(double));
+
+    for (i = 0; i < blocks; i++)
     {
-        DEBUG("Channel power: %f dB\n", 10*log10((energy/diff_ms) * 1000));
-        energy = 0;
-        memset(&tv_start, 0, sizeof(struct timespec));
+        if (spectrum_add_cmplx_s32(spect, &(signal[i*FFT_POINTS]), power_spectrum, FFT_POINTS))
+        {
+            ERROR("Error while estimating spectrum.\n");
+            return;
+        }
     }
+
+    pthread_mutex_lock(&data_mutex);
+
+    memcpy(power_spectrum_transfer, power_spectrum, FFT_POINTS*sizeof(double));
+    spectrum_averaging_count = blocks;
+
+    pthread_mutex_unlock(&data_mutex);*/
 }
 
 static int callback_rtl_ws(struct libwebsocket_context *context,
@@ -239,7 +314,7 @@ static int callback_rtl_ws(struct libwebsocket_context *context,
             if (should_send_spectrum())
             {
                 memset(send_buffer, 0, LWS_SEND_BUFFER_PRE_PADDING + SEND_BUFFER_SIZE + LWS_SEND_BUFFER_POST_PADDING);
-                n = sprintf(tmpbuffer, "f %u;b %u;s %d;", rtl_freq(dev), rtl_sample_rate(dev), sw_gain);
+                n = sprintf(tmpbuffer, "f %u;b %u;s %d;", rtl_freq(dev), rtl_sample_rate(dev), spectrum_gain);
                 memcpy(&send_buffer[LWS_SEND_BUFFER_PRE_PADDING], tmpbuffer, n);
                 nn = write_spectrum_message(&send_buffer[LWS_SEND_BUFFER_PRE_PADDING+n], SEND_BUFFER_SIZE/2);
                 n = libwebsocket_write(wsi, (unsigned char *)
@@ -269,10 +344,10 @@ static int callback_rtl_ws(struct libwebsocket_context *context,
                 rtl_set_sample_rate(dev, bw);
                 decimator_set_parameters(decim, rtl_sample_rate(dev), DOWNFACTOR);
             }
-            else if ((len >= strlen(SW_GAIN_CMD)) && strncmp(SW_GAIN_CMD, buffer, strlen(SW_GAIN_CMD)) == 0)
+            else if ((len >= strlen(SPECTRUM_GAIN_CMD)) && strncmp(SPECTRUM_GAIN_CMD, buffer, strlen(SPECTRUM_GAIN_CMD)) == 0)
             {
-                sw_gain = atoi(&buffer[strlen(SW_GAIN_CMD)]);
-                INFO("Software gain set to %d dB\n", sw_gain);
+                spectrum_gain = atoi(&buffer[strlen(SPECTRUM_GAIN_CMD)]);
+                INFO("Spectrum gain set to %d dB\n", spectrum_gain);
             }
             else if ((len >= strlen(START_CMD)) && strncmp(START_CMD, buffer, strlen(START_CMD)) == 0)
             {
@@ -336,13 +411,20 @@ int main(int argc, char **argv)
     INFO("Initializing decimator...\n");
     decim = decimator_alloc();
     decimator_set_parameters(decim, rtl_sample_rate(dev), DOWNFACTOR);
-    decimator_add_callback(decim, channel_handler);
+    decimator_add_callback(decim, estimate_decimated_spectrum);
+    decimator_add_callback(decim, fm_demodulator);
 
     info.user = dev;
     
     INFO("Initializing spectrum...\n");
     spect = spectrum_alloc(FFT_POINTS);
-    
+
+    INFO("Initializing CORDIC...\n");
+    if (!cordic_construct(CORDIC_ORDER))    
+    {
+        ERROR("CORDIC initializing failed");
+    }
+
     send_buffer = calloc(LWS_SEND_BUFFER_PRE_PADDING + SEND_BUFFER_SIZE + LWS_SEND_BUFFER_POST_PADDING, 1);
     while (n >= 0)
     {
@@ -456,8 +538,13 @@ int main(int argc, char **argv)
     pthread_mutex_destroy(&data_mutex);
 
     free(send_buffer);
+
+    cordic_destruct();
     spectrum_free(spect);
-    free(protos);
     decimator_free(decim);
+
+    free(protos);
+    free(demod_buffer);
+
     return 0;
 }
