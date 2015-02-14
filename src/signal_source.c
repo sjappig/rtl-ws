@@ -74,7 +74,7 @@ static void notify_callbacks(const cmplx_u8* signal, int len)
 {
     pthread_mutex_lock(&callback_mutex);
     struct signal_holder s_h = { signal, len };
-    list_apply(callback_list, callback_notifier, &s_h);
+    list_apply2(callback_list, callback_notifier, &s_h);
     pthread_mutex_unlock(&callback_mutex);
 }
 

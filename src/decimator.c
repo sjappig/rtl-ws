@@ -102,7 +102,7 @@ int decimator_decimate_cmplx_u8(struct decimator* d, const cmplx_u8* complex_sig
             return -2;
         }
 
-        list_apply(d->callback_list, callback_notifier, d);
+        list_apply2(d->callback_list, callback_notifier, d);
 
         d->surplus = 0;
         block_size = d->input_signal_len;

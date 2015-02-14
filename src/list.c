@@ -2,15 +2,16 @@
 #include <stdint.h>
 #include "list.h"
 
-struct _callback_node
+struct _node
 {
     void* data;
-    struct _callback_node* next;
+    struct _node* next;
 };
 
 struct list
 {
-    struct _callback_node* root;
+    struct _node* root;
+    int len;
 };
 
 struct list* list_alloc()
@@ -20,7 +21,7 @@ struct list* list_alloc()
 
 void list_add(struct list* l, void* data)
 {
-    struct _callback_node* node = l->root;
+    struct _node* node = l->root;
 
     if (node != NULL)
     {
@@ -28,19 +29,31 @@ void list_add(struct list* l, void* data)
         {
             node = node->next;
         }
-        node->next = (struct _callback_node*) calloc(1, sizeof(struct _callback_node));
+        node->next = (struct _node*) calloc(1, sizeof(struct _node));
         node->next->data = data;
     }
     else
     {
-        l->root = (struct _callback_node*) calloc(1, sizeof(struct _callback_node));
+        l->root = (struct _node*) calloc(1, sizeof(struct _node));
         l->root->data = data;
+    }
+    l->len++;
+}
+
+void list_apply(struct list* l, void (*func)(void*))
+{
+    struct _node* node = l->root;
+
+    while (node != NULL)
+    {
+        func(node->data);
+        node = node->next;
     }
 }
 
-void list_apply(struct list* l, void (*func)(void*,void*), void* user)
+void list_apply2(struct list* l, void (*func)(void*,void*), void* user)
 {
-    struct _callback_node* node = l->root;
+    struct _node* node = l->root;
 
     while (node != NULL)
     {
@@ -49,19 +62,33 @@ void list_apply(struct list* l, void (*func)(void*,void*), void* user)
     }
 }
 
-void list_clear(struct list* l)
+int list_length(const struct list* l)
 {
-    struct _callback_node* node = l->root;
-    struct _callback_node* prev_node = NULL;
+    return l->len;
+}
 
-    while (node != NULL)
+void* list_poll(struct list* l)
+{
+    struct _node* node = l->root;
+    void* data = NULL;
+
+    if (node != NULL)
     {
-        prev_node = node;
-        node = node->next;
-        free(prev_node);
+        l->root = node->next;
+        l->len--;
+        data = node->data;
+        free(node);
     }
 
-    l->root = NULL;
+    return data;
+}
+
+void list_clear(struct list* l)
+{
+    while (list_length(l) > 0)
+    {
+        list_poll(l);
+    }
 }
 
 void list_free(struct list* l)
