@@ -1,4 +1,4 @@
-#include <stdint.h>
+#include <string.h>
 #include "resample.h"
 
 int cic_decimate(int R, const cmplx_u8* src, int src_len, cmplx_s32* dst, int dst_len, struct cic_delay_line* delay)
@@ -40,4 +40,32 @@ int cic_decimate(int R, const cmplx_u8* src, int src_len, cmplx_s32* dst, int ds
     set_cmplx_s32(delay->integrator_prev_out, integrator_prev_out);
     set_cmplx_s32(delay->comb_prev_in, comb_prev_in);
     return 0;
+}
+
+static double half_band_kernel[] = { 0.01824, 0, -0.11614, 0, 0.34790, 0.5, 0.34790, 0, -0.11614, 0, 0.01824 };
+
+void decimate_by_two(double* input, double* output, int output_len, double* delay_line)
+{
+    register int n = 0;
+    register int k = 0;
+    register int idx = 0;
+
+    for (n = 0; n < output_len; n++) 
+    {
+        output[n] = 0;
+        for (k = 0; k < HALF_BAND_N; k++)
+        {
+            idx = 2*n - k;
+            if (idx >= 0)
+            {
+                output[n] += half_band_kernel[k] * input[idx];
+            } 
+            else
+            {
+                output[n] += half_band_kernel[k] * delay_line[HALF_BAND_N + idx];
+            }
+
+        }
+    }
+    memcpy(delay_line, input, (HALF_BAND_N - 1) * sizeof(double));
 }

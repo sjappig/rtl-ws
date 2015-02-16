@@ -2,6 +2,10 @@
 #define _COMMON_SP_H
 
 #include <stdint.h>
+#include <math.h>
+
+#define PI_DOUBLE     3.1415926535897932
+#define PIBY2_DOUBLE  1.5707963267948966
 
 typedef struct 
 {
@@ -35,5 +39,41 @@ typedef union
 #define real_cmplx_u8(c) (c.re)
 
 #define imag_cmplx_u8(c) (c.im)
+
+static inline double atan2_approx(float y, float x)
+{
+    register double atan = 0;
+    register float z = 0;
+
+    if ( x == 0.0f )
+    {
+        if ( y > 0.0f )
+            return PIBY2_DOUBLE;
+        
+        if ( y == 0.0f )
+            return 0.0f;
+
+        return -PIBY2_DOUBLE;
+    }
+    z = y/x;
+    if (fabs(z) < 1.0f)
+    {
+        atan = z/(1.0f + 0.28f*z*z);
+        if ( x < 0.0f )
+        {
+            if ( y < 0.0f )
+                return atan - PI_DOUBLE;
+            
+            return atan + PI_DOUBLE;
+        }
+    }
+    else
+    {
+        atan = PIBY2_DOUBLE - z/(z*z + 0.28f);
+        if ( y < 0.0f )
+            return atan - PI_DOUBLE;
+    }
+    return atan;
+}
 
 #endif

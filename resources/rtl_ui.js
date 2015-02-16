@@ -25,8 +25,48 @@ for (var idx = 0; idx < 200; idx++) {
 }
 var spectrogram_idx = -1;
 var spectrogram_image;
+var sound_on = false;
+var audioBufferSize = 4096;
+var playbackNode;
+var audioBufferQueue = [];
+var audioContext;
+
+function getAudio(output, length) {
+    var offset = 0;
+    while (offset < length) {
+        var buf = audioBufferQueue.shift();
+        if (buf != null) {
+            var len = (length - offset) > buf.length ? buf.length : (length - offset);
+            //console.log(audioBufferQueue.length);
+            //console.log(len);
+            for (var i = 0; i < len; i++) {
+                output[offset + i] = buf[i]; // Math.random() * 2 - 1;
+            }
+            offset += len;
+        } else {
+            for (var i = offset; i < length; i++) {
+                output[i] = 0;
+            }
+            break;
+        }
+    }
+}
 
 function initialize() {
+
+    try {
+        window.AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioContext = new AudioContext();
+    } catch(e) {
+        alert('Web Audio API is not supported in this browser');
+    }
+    console.log("Audio sample rate is " + audioContext.sampleRate + " Hz");
+
+    playbackNode = audioContext.createScriptProcessor(audioBufferSize, 1, 1);
+    playbackNode.onaudioprocess = function(e) {
+        getAudio(e.outputBuffer.getChannelData(0), audioBufferSize);
+    };
+
     socket_lm = new WebSocket(get_appropriate_ws_url(), "rtl-ws-protocol");
     console.log("WebSocket instantiated");
     try {
@@ -37,6 +77,7 @@ function initialize() {
         } 
 
         socket_lm.onmessage = function got_packet(msg) {
+            var data_type = "";
             var bytearray = new Uint8Array(msg.data);
             var header = "";
             var readChar = '0';
@@ -45,57 +86,69 @@ function initialize() {
                 readChar = String.fromCharCode(bytearray[header_len++]);
                 header += readChar;
             }
-            ctx.clearRect(0, 0, 1030, 315);
 
             j = header.split(';');
             f = 0;
             var redraw_hz_axis = false;
             while (f < j.length) {
-                i = j[f].split(' ');
-                if (i[0] == 'd') {
-                    spectrogram_idx++;
-                    if (spectrogram_idx >= spectrogram.length) {
-                        spectrogram_idx = 0;
-                    }
-                    ctx.beginPath();
-                    ctx.moveTo(0, -i[1]*2+y_offset);
-                    ctx.strokeStyle = "black";
-                    for (var idx = 0; idx < bytearray.length - header_len; idx++) {
-                        var value = bytearray[idx + header_len];
-                        spectrogram[spectrogram_idx][idx-1] = value;
-                        ctx.lineTo(idx, -value*4+y_offset);
-                    }
-                    ctx.stroke();
-                    ctx.closePath();
-                } else if (i[0] == 'b') {
-                    var bw_element = document.getElementById("bandwidth");
-                    if ((bw_element.value*1000) != i[1]) {
-                        bw_element.style.color = "lightgray";
-                    } else {
-                        bw_element.style.color = "black";
-                        real_bandwidth = parseInt(bandwidth);
-                        redraw_hz_axis = true;
-                    }
-                } else if (i[0] == 'f') {
-                    var freq_element = document.getElementById("frequency");
-                    if ((freq_element.value*1000) != i[1]) {
-                        freq_element.style.color = "lightgray";
-                    } else {
-                        freq_element.style.color = "black";
-                        real_frequency = parseInt(frequency);
-                        redraw_hz_axis = true;
+                if (j[f].charAt(0) != 'F') {
+                    i = j[f].split(' ');
+                    if (i[0] == 'd') {
+                        if (data_type == "s") {
+                            ctx.clearRect(0, 0, 1030, 315);
+                            spectrogram_idx++;
+                            if (spectrogram_idx >= spectrogram.length) {
+                                spectrogram_idx = 0;
+                            }
+                            ctx.beginPath();
+                            for (var idx = 0; idx < bytearray.length - header_len; idx++) {
+                                if (idx == 0) {
+                                    ctx.moveTo(0, -value*4+y_offset);
+                                    ctx.strokeStyle = "black";
+                                }
+                                var value = bytearray[idx + header_len];
+                                spectrogram[spectrogram_idx][idx-1] = value;
+                                ctx.lineTo(idx, -value*4+y_offset);
+                            }
+                            ctx.stroke();
+                            ctx.closePath();
+                        } else if (data_type == "a") {
+                            var audioArray = new Float64Array(msg.data, header_len);
+                            audioBufferQueue.push(audioArray);
+                            if (audioBufferQueue.length > 100) {
+                                audioBufferQueue.shift();
+                            }
+                        }
+                    } else if (i[0] == 'b') {
+                        var bw_element = document.getElementById("bandwidth");
+                        if ((bw_element.value*1000) != i[1]) {
+                            bw_element.style.color = "lightgray";
+                        } else {
+                            bw_element.style.color = "black";
+                            real_bandwidth = parseInt(bandwidth);
+                            redraw_hz_axis = true;
+                        }
+                    } else if (i[0] == 'f') {
+                        var freq_element = document.getElementById("frequency");
+                        if ((freq_element.value*1000) != i[1]) {
+                            freq_element.style.color = "lightgray";
+                        } else {
+                            freq_element.style.color = "black";
+                            real_frequency = parseInt(frequency);
+                            redraw_hz_axis = true;
+                        }
+                    } else if (i[0] == 's') {
+                        var spectrumgain_element = document.getElementById("spectrumgain");
+                        if (spectrumgain_element.value != i[1]) {
+                            spectrumgain_element.style.color = "lightgray";
+                        } else {
+                            spectrumgain_element.style.color = "black";
+                            real_spectrumgain = parseInt(spectrumgain);
+                        }
+                    } else if (i[0] == 't') {
+                        data_type = i[1];
                     }
                 }
-                else if (i[0] == 's') {
-                    var spectrumgain_element = document.getElementById("spectrumgain");
-                    if (spectrumgain_element.value != i[1]) {
-                        spectrumgain_element.style.color = "lightgray";
-                    } else {
-                        spectrumgain_element.style.color = "black";
-                        real_spectrumgain = parseInt(spectrumgain);
-                    }
-                }
-
                 f++;
             }
             if (redraw_hz_axis) {
@@ -215,5 +268,14 @@ function start_or_stop() {
     } else {
         started = false;
         document.getElementById("start_or_stop").value = "start";
+    }
+}
+
+function toggle_sound() {
+    sound_on = !sound_on;
+    if (sound_on) {
+        playbackNode.connect(audioContext.destination);
+    } else {
+        playbackNode.disconnect(audioContext.destination);
     }
 }
