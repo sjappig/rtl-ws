@@ -4,6 +4,6 @@
 #include <stdint.h>
 
 /* returns milliseconds since Jan. 1. 1970 */
-uint64_t timestamp() ;
+uint64_t timestamp();
 
 #endif

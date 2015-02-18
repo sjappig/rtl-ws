@@ -1,5 +1,6 @@
 #ifndef RESAMPLE_H
 #define RESAMPLE_H
+
 #include "common_sp.h"
 
 #define HALF_BAND_N 11
