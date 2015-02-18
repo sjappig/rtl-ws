@@ -37,10 +37,8 @@ function getAudio(output, length) {
         var buf = audioBufferQueue.shift();
         if (buf != null) {
             var len = ((length - offset) <= buf.length) ? (length - offset) : buf.length;
-            //console.log(audioBufferQueue.length);
-            //console.log(len);
             for (var i = 0; i < len; i++) {
-                output[offset + i] = buf[i]; // Math.random() * 2 - 1;
+                output[offset + i] = buf[i];
             }
             if (len - buf.length > 0) {
                 console.log("Returning buffer to queue");
@@ -59,7 +57,6 @@ function getAudio(output, length) {
 }
 
 function initialize() {
-
     try {
         window.AudioContext = window.AudioContext || window.webkitAudioContext;
         audioContext = new AudioContext();
@@ -67,6 +64,10 @@ function initialize() {
         alert('Web Audio API is not supported in this browser');
     }
     console.log("Audio sample rate is " + audioContext.sampleRate + " Hz");
+    if (audioContext.sampleRate != 48000)
+    {
+        alert("Audio sample rate should be 48 kHz for playback");
+    }
 
     playbackNode = audioContext.createScriptProcessor(audioBufferSize, 1, 1);
     playbackNode.onaudioprocess = function(e) {
