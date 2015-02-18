@@ -36,14 +36,20 @@ function getAudio(output, length) {
     while (offset < length) {
         var buf = audioBufferQueue.shift();
         if (buf != null) {
-            var len = (length - offset) > buf.length ? buf.length : (length - offset);
+            var len = ((length - offset) <= buf.length) ? (length - offset) : buf.length;
             //console.log(audioBufferQueue.length);
             //console.log(len);
             for (var i = 0; i < len; i++) {
                 output[offset + i] = buf[i]; // Math.random() * 2 - 1;
             }
+            if (len - buf.length > 0) {
+                console.log("Returning buffer to queue");
+                audioBufferQueue.unshift(buf.slice(len, buf.length - 1));
+                break;
+            }
             offset += len;
         } else {
+            console.log("Filling listening buffer with " + (length - offset) + " zeros)");
             for (var i = offset; i < length; i++) {
                 output[i] = 0;
             }
@@ -113,11 +119,12 @@ function initialize() {
                             ctx.stroke();
                             ctx.closePath();
                         } else if (data_type == "a") {
-                            var audioArray = new Float64Array(msg.data, header_len);
-                            audioBufferQueue.push(audioArray);
-                            if (audioBufferQueue.length > 100) {
-                                audioBufferQueue.shift();
+                            var audioArray = new Float32Array(msg.data, header_len);
+                            if (audioBufferQueue.length >= 50) {
+                                console.log("Dropping data (latest audioarray " + audioArray.length + " samples)");
+                                audioBufferQueue = [];
                             }
+                            audioBufferQueue.push(audioArray);
                         }
                     } else if (i[0] == 'b') {
                         var bw_element = document.getElementById("bandwidth");
@@ -245,11 +252,13 @@ function update_spectrogram()
 }
 
 function frequency_change() {
+    audioBufferQueue = [];
     frequency = document.getElementById("frequency").value;
     socket_lm.send("freq " + frequency);
 }
 
 function bw_change() {
+    audioBufferQueue = [];
     bandwidth = document.getElementById("bandwidth").value;
     socket_lm.send("bw " + bandwidth);
 }
@@ -272,6 +281,7 @@ function start_or_stop() {
 }
 
 function toggle_sound() {
+    audioBufferQueue = [];
     sound_on = !sound_on;
     if (sound_on) {
         playbackNode.connect(audioContext.destination);

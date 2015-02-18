@@ -139,7 +139,10 @@ void rtl_cancel(struct rtl_dev* dev)
 {
     if (dev->dev != NULL)
     {
-        rtlsdr_cancel_async(dev->dev);
+        if (rtlsdr_cancel_async(dev->dev) != 0) 
+        {
+            ERROR("Canceling rtl async failed\n");
+        }
     }
 }
 

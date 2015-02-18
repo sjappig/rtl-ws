@@ -1,6 +1,8 @@
 #include <string.h>
 #include "resample.h"
 
+static float half_band_kernel[] = { 0.01824f, 0.0f, -0.11614f, 0.0f, 0.34790f, 0.5f, 0.34790f, 0.0f, -0.11614f, 0.0f, 0.01824f };
+
 int cic_decimate(int R, const cmplx_u8* src, int src_len, cmplx_s32* dst, int dst_len, struct cic_delay_line* delay)
 {
     register int src_idx = 0;
@@ -18,14 +20,14 @@ int cic_decimate(int R, const cmplx_u8* src, int src_len, cmplx_s32* dst, int ds
 
     for (src_idx = 0; src_idx < src_len; src_idx++)
     {
-        // integrator y(n) = y(n-1) + x(n)
+        /* integrator y(n) = y(n-1) + x(n) */
         set_cmplx_s32_cmplx_u8(integrator_curr_in, src[src_idx], -128);
         add_cmplx_s32(integrator_curr_in, integrator_prev_out, integrator_curr_out);
 
-        // resample
+        /* resample */
         if (((src_idx+1) % R) == 0)
         {
-            // comb y(n) = x(n) - x(n-1)
+            /* comb y(n) = x(n) - x(n-1) */
             if (dst_idx >= dst_len)
             {
                 return -2;
@@ -42,9 +44,7 @@ int cic_decimate(int R, const cmplx_u8* src, int src_len, cmplx_s32* dst, int ds
     return 0;
 }
 
-static double half_band_kernel[] = { 0.01824, 0, -0.11614, 0, 0.34790, 0.5, 0.34790, 0, -0.11614, 0, 0.01824 };
-
-void decimate_by_two(double* input, double* output, int output_len, double* delay_line)
+void halfband_decimate(const float* input, float* output, int output_len, float* delay)
 {
     register int n = 0;
     register int k = 0;
@@ -52,20 +52,16 @@ void decimate_by_two(double* input, double* output, int output_len, double* dela
 
     for (n = 0; n < output_len; n++) 
     {
-        output[n] = 0;
-        for (k = 0; k < HALF_BAND_N; k++)
+
+        idx = 2*n - HALF_BAND_N/2;
+        output[n] = half_band_kernel[HALF_BAND_N/2] * (idx >= 0 ? input[idx] : delay[(HALF_BAND_N - 1) + idx]);
+        
+        /* all odd samples in half band kernel are zeroes except the middle one */
+        for (k = 0; k < HALF_BAND_N; k += 2)
         {
             idx = 2*n - k;
-            if (idx >= 0)
-            {
-                output[n] += half_band_kernel[k] * input[idx];
-            } 
-            else
-            {
-                output[n] += half_band_kernel[k] * delay_line[HALF_BAND_N + idx];
-            }
-
+            output[n] += half_band_kernel[k] * (idx >= 0 ? input[idx] : delay[(HALF_BAND_N - 1) + idx]);
         }
     }
-    memcpy(delay_line, input, (HALF_BAND_N - 1) * sizeof(double));
+    memcpy(delay, &(input[2*output_len - (HALF_BAND_N - 1)]) , (HALF_BAND_N - 1) * sizeof(float));
 }

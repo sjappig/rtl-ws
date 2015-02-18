@@ -5,8 +5,8 @@
 
 struct rtl_dev;
 
-int rtl_init(struct rtl_dev** dev, int dev_index);
 
+int rtl_init(struct rtl_dev** dev, int dev_index);
 
 int rtl_set_frequency(struct rtl_dev* dev, uint32_t f);
 
@@ -14,13 +14,11 @@ int rtl_set_sample_rate(struct rtl_dev* dev, uint32_t fs);
 
 int rtl_set_gain(struct rtl_dev* dev, double gain);
 
-
 uint32_t rtl_freq(const struct rtl_dev* dev);
 
 uint32_t rtl_sample_rate(const struct rtl_dev* dev);
 
 double rtl_gain(const struct rtl_dev* dev);
-
 
 int rtl_read(struct rtl_dev* dev, char* buffer, int buf_len, int* n_read);
 

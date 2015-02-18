@@ -1,11 +1,8 @@
-#ifndef _COMMON_SP_H
-#define _COMMON_SP_H
+#ifndef COMMON_SP_H
+#define COMMON_SP_H
 
 #include <stdint.h>
 #include <math.h>
-
-#define PI_DOUBLE     3.1415926535897932
-#define PIBY2_DOUBLE  1.5707963267948966
 
 typedef struct 
 {
@@ -40,38 +37,40 @@ typedef union
 
 #define imag_cmplx_u8(c) (c.im)
 
-static inline double atan2_approx(float y, float x)
+static inline float atan2_approx(float y, float x)
 {
-    register double atan = 0;
+    static const float pi = (float) M_PI;
+    static const float pi_by_2 = (float) (M_PI / 2);
+    register float atan = 0;
     register float z = 0;
 
-    if ( x == 0.0f )
+    if (x == 0)
     {
-        if ( y > 0.0f )
-            return PIBY2_DOUBLE;
+        if (y > 0.0f)
+            return pi_by_2;
         
-        if ( y == 0.0f )
-            return 0.0f;
+        if (y == 0)
+            return 0;
 
-        return -PIBY2_DOUBLE;
+        return -pi_by_2;
     }
     z = y/x;
     if (fabs(z) < 1.0f)
     {
         atan = z/(1.0f + 0.28f*z*z);
-        if ( x < 0.0f )
+        if (x < 0)
         {
-            if ( y < 0.0f )
-                return atan - PI_DOUBLE;
+            if (y < 0.0f)
+                return atan - M_PI;
             
-            return atan + PI_DOUBLE;
+            return atan + M_PI;
         }
     }
     else
     {
-        atan = PIBY2_DOUBLE - z/(z*z + 0.28f);
-        if ( y < 0.0f )
-            return atan - PI_DOUBLE;
+        atan = pi_by_2 - z/(z*z + 0.28f);
+        if (y < 0.0f)
+            return atan - M_PI;
     }
     return atan;
 }

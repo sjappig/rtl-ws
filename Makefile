@@ -1,7 +1,8 @@
 SRCDIR=src
 BUILDDIR=build
 VPATH=$(SRCDIR)
-GCC=gcc -O3 -ffast-math -fprefetch-loop-arrays -funroll-loops
+PERF_OPTS=-O3 -ffast-math -fprefetch-loop-arrays -funroll-loops
+GCC=gcc $(PERF_OPTS)
 PPDEFS=-DRTL_WS_DEBUG
 PROGRAM=$(BUILDDIR)/rtl-ws-server
 CSOURCEFILES=$(shell ls $(SRCDIR)/*.c)

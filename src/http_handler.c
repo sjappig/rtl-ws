@@ -12,10 +12,29 @@ struct per_session_data__http
 };
 
 static struct libwebsocket_protocols http_protocol = 
-    { "http-only", callback_http, sizeof (struct per_session_data__http), 1024 };
+    { "http-only", callback_http, sizeof (struct per_session_data__http) };
 
+static const char * get_mimetype(const char *file)
+{
+    int n = strlen(file);
 
-static const char * get_mimetype(const char *file);
+    if (n < 5)
+        return NULL;
+
+    if (!strcmp(&file[n - 4], ".ico"))
+        return "image/x-icon";
+
+    if (!strcmp(&file[n - 4], ".png"))
+        return "image/png";
+
+    if (!strcmp(&file[n - 5], ".html"))
+        return "text/html";
+
+    if (!strcmp(&file[n - 3], ".js"))
+        return "text/javascript";
+
+    return NULL;
+}
 
 struct libwebsocket_protocols* get_http_protocol()
 {
@@ -25,15 +44,12 @@ struct libwebsocket_protocols* get_http_protocol()
 int callback_http(struct libwebsocket_context *context, struct libwebsocket *wsi,
     enum libwebsocket_callback_reasons reason, void *user, void *in, size_t len)
 {
-    char buf[256];
-    char leaf_path[1024];
-    char b64[64];
-    struct timeval tv;
-    int n, m;
-    unsigned char *p;
     static unsigned char buffer[4096];
+    char buf[256];
+    int n = 0;
+    int m = 0;
     struct per_session_data__http *pss = (struct per_session_data__http *) user;
-    const char *mimetype;
+    const char *mimetype = NULL;
 
     switch (reason) 
     {
@@ -148,26 +164,4 @@ int callback_http(struct libwebsocket_context *context, struct libwebsocket *wsi
     }
 
     return 0;
-}
-
-static const char * get_mimetype(const char *file)
-{
-    int n = strlen(file);
-
-    if (n < 5)
-        return NULL;
-
-    if (!strcmp(&file[n - 4], ".ico"))
-        return "image/x-icon";
-
-    if (!strcmp(&file[n - 4], ".png"))
-        return "image/png";
-
-    if (!strcmp(&file[n - 5], ".html"))
-        return "text/html";
-
-    if (!strcmp(&file[n - 3], ".js"))
-        return "text/javascript";
-
-    return NULL;
 }

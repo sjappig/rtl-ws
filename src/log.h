@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <time.h>
 
-
 #define RTL_WS_LOG_PREFIX(out) fprintf(out, "%u ", (unsigned int) time(NULL)); fprintf(out, __FILE__); fprintf(out, ":"); fprintf(out, "%d", __LINE__);
 
 #ifdef RTL_WS_DEBUG

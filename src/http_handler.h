@@ -1,5 +1,5 @@
-#ifndef HTTP_HANDLER
-#define HTTP_HANDLER
+#ifndef HTTP_HANDLER_H
+#define HTTP_HANDLER_H
 
 #include <libwebsockets.h>
 
