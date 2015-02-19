@@ -94,10 +94,10 @@ static int callback_rtl_ws(struct libwebsocket_context *context,
                         audio_write_mode = LWS_WRITE_BINARY;
                     }
 
-                    nn = audio_get_audio_payload(&(send_buffer[LWS_SEND_BUFFER_PRE_PADDING+n]), 1024);
+                    nn = audio_get_audio_payload(&(send_buffer[LWS_SEND_BUFFER_PRE_PADDING+n]), 2048);
                     if (nn > 0)
                     {
-                        if (pss->sent_audio_fragments < 15)
+                        if (pss->sent_audio_fragments < 7)
                         {
                             audio_write_mode |= LWS_WRITE_NO_FIN;
                             pss->sent_audio_fragments++;

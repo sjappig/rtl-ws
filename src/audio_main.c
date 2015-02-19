@@ -8,7 +8,7 @@
 #include "rate_logger.h"
 #include "audio_main.h"
 
-#define AUDIO_BUFFER_POOL   20
+#define AUDIO_BUFFER_POOL   50
 
 static struct rate_logger* audio_rate_log = NULL;
 static float* demod_buffer = NULL;

@@ -13,10 +13,9 @@
 #include "cbb_main.h"
 
 #define DEV_INDEX           0
-#define SPECTRUM_EST_MS     200
+#define SPECTRUM_EST_MS     250
 #define FFT_POINTS          1024
 #define FFT_AVERAGE         6
-#define CBB_DOWNFACTOR      10
 
 static struct rtl_dev* dev;
 static pthread_mutex_t spectrum_mutex;
