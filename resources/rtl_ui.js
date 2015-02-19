@@ -38,7 +38,19 @@ function getAudio(output, length) {
         if (buf != null) {
             var len = ((length - offset) <= buf.length) ? (length - offset) : buf.length;
             for (var i = 0; i < len; i++) {
-                output[offset + i] = buf[i];
+                output[offset + i] = 0.4*buf[i];
+                if (i > 1) {
+                    output[offset + i] += 0.2*buf[i-1];
+                }
+                if (i > 2) {
+                    output[offset + i] += 0.1*buf[i-2];
+                }
+                if (i < (len - 1)) {
+                    output[offset + i] += 0.2*buf[i+1];
+                }
+                if (i < (len - 2)) {
+                    output[offset + i] += 0.1*buf[i+2];
+                }
             }
             if (len - buf.length > 0) {
                 console.log("Returning buffer to queue");
