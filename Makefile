@@ -7,13 +7,17 @@ PPDEFS=-DRTL_WS_DEBUG
 PROGRAM=$(BUILDDIR)/rtl-ws-server
 CSOURCEFILES=$(shell ls $(SRCDIR)/*.c)
 COBJFILES=$(subst .c,.o,$(subst $(SRCDIR),$(BUILDDIR),$(CSOURCEFILES)))
+ifdef REAL_SENSOR
+PPDEFS+=-DREAL_SENSOR
+SENSORLIB=-lrtlsdr
+endif
 
 define compilec
 $(GCC) $(PPDEFS) -c -B $(SRCDIR) $< -o $@
 endef
 
 define link
-$(GCC) $^ -lpthread -lwebsockets -lrtlsdr -lrt -lm -lfftw3 -o $@
+$(GCC) $^ -lpthread -lwebsockets $(SENSORLIB) -lrt -lm -lfftw3 -o $@
 endef
 
 .PHONY: all build prepare clean
