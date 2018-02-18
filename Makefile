@@ -7,7 +7,8 @@ PPDEFS=-DRTL_WS_DEBUG
 PROGRAM=$(BUILDDIR)/rtl-ws-server
 CSOURCEFILES=$(shell ls $(SRCDIR)/*.c)
 COBJFILES=$(subst .c,.o,$(subst $(SRCDIR),$(BUILDDIR),$(CSOURCEFILES)))
-ifdef REAL_SENSOR
+REAL_SENSOR:=1
+ifeq ($(REAL_SENSOR), 1)
 PPDEFS+=-DREAL_SENSOR
 SENSORLIB=-lrtlsdr
 endif
