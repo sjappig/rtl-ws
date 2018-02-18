@@ -25,10 +25,10 @@ struct rtl_dev {
 int rtl_init(struct rtl_dev** dev, int dev_index) 
 {
     int r = 0;
-    DEBUG("rtl_init called with dev == %x, dev_index == %d\n", (unsigned long) dev, dev_index);
+    DEBUG("rtl_init called with dev == %lx, dev_index == %d\n", (unsigned long) dev, dev_index);
     *dev = (struct rtl_dev*) calloc(1, sizeof(struct rtl_dev));
 #ifdef REAL_SENSOR
-    r = rtlsdr_open(&((*dev)->dev), dev_index)
+    r = rtlsdr_open(&((*dev)->dev), dev_index);
 #endif //REAL_SENSOR
     if (r >= 0)
     {
@@ -167,7 +167,7 @@ void rtl_cancel(struct rtl_dev* dev)
 
 void rtl_close(struct rtl_dev* dev) 
 {
-    DEBUG("rtl_close called with dev == %x\n", (unsigned long) dev);
+    DEBUG("rtl_close called with dev == %lx\n", (unsigned long) dev);
 #ifdef REAL_SENSOR
     if (dev->dev != NULL)
     {

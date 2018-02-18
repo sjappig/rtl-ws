@@ -11,7 +11,7 @@ struct per_session_data__http
     int fd;
 };
 
-static struct libwebsocket_protocols http_protocol = 
+static struct lws_protocols http_protocol =
     { "http-only", callback_http, sizeof (struct per_session_data__http) };
 
 static const char * get_mimetype(const char *file)
@@ -36,13 +36,13 @@ static const char * get_mimetype(const char *file)
     return NULL;
 }
 
-struct libwebsocket_protocols* get_http_protocol()
+struct lws_protocols* get_http_protocol()
 {
     return &http_protocol;
 }
 
-int callback_http(struct libwebsocket_context *context, struct libwebsocket *wsi,
-    enum libwebsocket_callback_reasons reason, void *user, void *in, size_t len)
+int callback_http(struct lws *wsi,
+    enum lws_callback_reasons reason, void *user, void *in, size_t len)
 {
     static unsigned char buffer[4096];
     char buf[256];
@@ -57,7 +57,7 @@ int callback_http(struct libwebsocket_context *context, struct libwebsocket *wsi
 
             if (len < 1) 
             {
-                libwebsockets_return_http_status(context, wsi,
+                lws_return_http_status(wsi,
                     HTTP_STATUS_BAD_REQUEST, NULL);
                 return -1;
             }
@@ -65,7 +65,7 @@ int callback_http(struct libwebsocket_context *context, struct libwebsocket *wsi
             /* this server has no concept of directories */
             if (strchr((const char *) in + 1, '/')) 
             {
-                libwebsockets_return_http_status(context, wsi,
+                lws_return_http_status(wsi,
                     HTTP_STATUS_FORBIDDEN, NULL);
                 return -1;
             }
@@ -96,13 +96,12 @@ int callback_http(struct libwebsocket_context *context, struct libwebsocket *wsi
             if (!mimetype) 
             {
                 lwsl_err("Unknown mimetype for %s\n", buf);
-                libwebsockets_return_http_status(context, wsi,
+                lws_return_http_status(wsi,
                     HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, NULL);
                 return -1;
             }
 
-            if (libwebsockets_serve_http_file(context, wsi, buf,
-                mimetype, NULL, 0))
+            if (lws_serve_http_file(wsi, buf, mimetype, NULL, 0))
             {
                 return -1; /* through completion or error, close the socket */
             }
@@ -123,8 +122,7 @@ int callback_http(struct libwebsocket_context *context, struct libwebsocket *wsi
         case LWS_CALLBACK_HTTP_BODY_COMPLETION:
             lwsl_notice("LWS_CALLBACK_HTTP_BODY_COMPLETION\n");
             /* the whole of the sent body arried, close the connection */
-            libwebsockets_return_http_status(context, wsi, HTTP_STATUS_OK, 
-                NULL);
+            lws_return_http_status(wsi, HTTP_STATUS_OK, NULL);
 
             return -1;
 
@@ -141,7 +139,7 @@ int callback_http(struct libwebsocket_context *context, struct libwebsocket *wsi
                     close(pss->fd);
                     return -1;
                 }
-                m = libwebsocket_write(wsi, buffer, n, LWS_WRITE_HTTP);
+                m = lws_write(wsi, buffer, n, LWS_WRITE_HTTP);
                 if (m < 0) 
                 {
                     close(pss->fd);
@@ -155,7 +153,7 @@ int callback_http(struct libwebsocket_context *context, struct libwebsocket *wsi
 
             } while (!lws_send_pipe_choked(wsi));
 
-            libwebsocket_callback_on_writable(context, wsi);
+            lws_callback_on_writable(wsi);
 
             break;
 

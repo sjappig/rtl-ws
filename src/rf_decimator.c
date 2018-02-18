@@ -57,7 +57,7 @@ int rf_decimator_set_parameters(struct rf_decimator* d, double sample_rate, int 
     pthread_mutex_lock(&(d->mutex));
     if (sample_rate > 0 && down_factor > 0)
     {
-        if (abs(d->sample_rate - sample_rate) > EPSILON || d->down_factor != down_factor)
+        if (fabs(d->sample_rate - sample_rate) > EPSILON || d->down_factor != down_factor)
         {
             DEBUG("Setting RF decimator params: sample_rate == %f, down_factor == %d\n", sample_rate, down_factor);
             d->sample_rate = sample_rate;

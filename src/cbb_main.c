@@ -122,7 +122,7 @@ int cbb_get_spectrum_payload(char* buf, int buf_len, int spectrum_gain_db)
     {
         for (idx = 0; idx < FFT_POINTS; idx++)
         {
-            int m = 10*log10(abs(linear_energy_gain * power_spectrum_local[idx] / spectrum_averaging_count_local));
+            int m = 10*log10(fabs(linear_energy_gain * power_spectrum_local[idx] / spectrum_averaging_count_local));
             m = m >= 0 ? m : 0;
             m = m <= 255 ? m : 255;
             buf[len++] = (char) m;

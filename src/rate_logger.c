@@ -44,7 +44,7 @@ void rate_logger_log(struct rate_logger* r, int sample_count)
     diff_ms = timestamp() - r->last_timestamp;
     if (diff_ms >= r->log_rate_ms)
     {
-        INFO("[%s] Sample rate: %llu kHz\n", ((r->logger_name != NULL) ? r->logger_name : "null"), r->received_samples/diff_ms);
+        INFO("[%s] Sample rate: %lu kHz\n", ((r->logger_name != NULL) ? r->logger_name : "null"), r->received_samples/diff_ms);
         r->received_samples = 0;
     }
 }

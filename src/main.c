@@ -36,8 +36,7 @@ static volatile int spectrum_gain = 0;
 
 static char* send_buffer = NULL;
 
-static int callback_rtl_ws(struct libwebsocket_context *context,
-    struct libwebsocket *wsi, enum libwebsocket_callback_reasons reason,
+static int callback_rtl_ws(struct lws *wsi, enum lws_callback_reasons reason,
     void *user, void *in, size_t len)
 {
     int f = 0;
@@ -81,7 +80,7 @@ static int callback_rtl_ws(struct libwebsocket_context *context,
                     n = sprintf(tmpbuffer, "t s;f %u;b %u;s %d;d", rtl_freq(dev), rtl_sample_rate(dev), spectrum_gain);
                     memcpy(&send_buffer[LWS_SEND_BUFFER_PRE_PADDING], tmpbuffer, n);
                     nn = cbb_get_spectrum_payload(&send_buffer[LWS_SEND_BUFFER_PRE_PADDING+n], SEND_BUFFER_SIZE/2, spectrum_gain);
-                    nnn = libwebsocket_write(wsi, (unsigned char *)
+                    nnn = lws_write(wsi, (unsigned char *)
                         &send_buffer[LWS_SEND_BUFFER_PRE_PADDING], n+nn, LWS_WRITE_BINARY);
                 }
                 else if (audio_new_audio_available())
@@ -107,7 +106,7 @@ static int callback_rtl_ws(struct libwebsocket_context *context,
                         {
                             pss->sent_audio_fragments = 0;
                         }
-                        nnn = libwebsocket_write(wsi, (unsigned char *)
+                        nnn = lws_write(wsi, (unsigned char *)
                             &(send_buffer[LWS_SEND_BUFFER_PRE_PADDING]), n + nn, audio_write_mode);
                     }
                     else 
@@ -133,7 +132,7 @@ static int callback_rtl_ws(struct libwebsocket_context *context,
             }
 
             if (pss->send_data)
-                libwebsocket_callback_on_writable(context, wsi);
+                lws_callback_on_writable(wsi);
 
             break;
 
@@ -162,7 +161,7 @@ static int callback_rtl_ws(struct libwebsocket_context *context,
             else if ((len >= strlen(START_CMD)) && strncmp(START_CMD, in_buffer, strlen(START_CMD)) == 0)
             {
                 pss->send_data = 1;
-                libwebsocket_callback_on_writable_all_protocol(libwebsockets_get_protocol(wsi));
+                lws_callback_on_writable_all_protocol(lws_get_context(wsi), lws_get_protocol(wsi));
             }
             else if ((len >= strlen(STOP_CMD)) && strncmp(STOP_CMD, in_buffer, strlen(STOP_CMD)) == 0)
             {
@@ -185,14 +184,14 @@ static void sighandler(int sig)
 
 int main(int argc, char **argv)
 {
-    struct libwebsocket_protocols ws_protocol = {
+    struct lws_protocols ws_protocol = {
         "rtl-ws-protocol",
         callback_rtl_ws,
         sizeof(struct per_session_data__rtl_ws)
     };
-    struct libwebsocket_protocols protos[3] = { 0 };
+    struct lws_protocols protos[3] = { 0 };
     int status = 0;
-    struct libwebsocket_context *context = NULL;
+    struct lws_context *context = NULL;
     struct lws_context_creation_info info = { 0 };
 
     send_buffer = calloc(LWS_SEND_BUFFER_PRE_PADDING + SEND_BUFFER_SIZE + LWS_SEND_BUFFER_POST_PADDING, 1);
@@ -207,18 +206,18 @@ int main(int argc, char **argv)
 
     signal(SIGINT, sighandler);
 
-    memcpy(protos, get_http_protocol(), sizeof(struct libwebsocket_protocols));
-    memcpy(&(protos[1]), &ws_protocol, sizeof(struct libwebsocket_protocols));
+    memcpy(protos, get_http_protocol(), sizeof(struct lws_protocols));
+    memcpy(&(protos[1]), &ws_protocol, sizeof(struct lws_protocols));
     
     info.port = PORT;
     info.protocols = protos;
-    info.extensions = libwebsocket_get_internal_extensions();
+    info.extensions = NULL;
 
     info.gid = -1;
     info.uid = -1;
 
     INFO("Initializing websockets...\n");
-    context = libwebsocket_create_context(&info);
+    context = lws_create_context(&info);
     if (context == NULL)
     {
         ERROR("Websocket init failed\n");
@@ -227,7 +226,7 @@ int main(int argc, char **argv)
 
     while (status >= 0 && !force_exit)
     {
-        status = libwebsocket_service(context, 10);
+        status = lws_service(context, 10);
     }
 
     free(send_buffer);
@@ -239,7 +238,7 @@ int main(int argc, char **argv)
     audio_close();
     
     INFO("Destroying libwebsocket context\n");
-    libwebsocket_context_destroy(context);
+    lws_context_destroy(context);
 
     return 0;
 }
